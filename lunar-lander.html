@@ -1,0 +1,594 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
+<title>32953 — LUNAR LANDER</title>
+<style>
+  @import url('https://fonts.googleapis.com/css2?family=Share+Tech+Mono&family=Orbitron:wght@400;700;900&display=swap');
+
+  :root {
+    --green: #00ff88;
+    --dimgreen: #00aa55;
+    --red: #ff2244;
+    --yellow: #ffcc00;
+    --bg: #000a04;
+    --panel: #001a0a;
+    --border: #00ff8833;
+  }
+
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+
+  html, body {
+    width: 100%; height: 100%;
+    background: #111;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    overflow: hidden;
+    font-family: 'Share Tech Mono', monospace;
+  }
+
+  #app {
+    width: 380px;
+    height: 680px;
+    background: var(--bg);
+    display: flex;
+    flex-direction: column;
+    position: relative;
+    overflow: hidden;
+    box-shadow: 0 0 60px #00ff8833, 0 0 120px #00ff8811;
+    border: 1px solid #00ff8844;
+  }
+
+  /* Dashed border decoration strips */
+  .border-strip {
+    position: absolute;
+    background: repeating-linear-gradient(
+      180deg,
+      #00ff8855 0px, #00ff8855 6px,
+      transparent 6px, transparent 14px
+    );
+    width: 3px;
+    top: 0; bottom: 0;
+    z-index: 50;
+    pointer-events: none;
+  }
+  .border-strip.left { left: 0; }
+  .border-strip.right { right: 0; }
+
+  #header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: 8px 16px;
+    border-bottom: 1px solid var(--border);
+    background: var(--panel);
+    flex-shrink: 0;
+  }
+
+  #site-title {
+    font-family: 'Orbitron', monospace;
+    font-size: 16px;
+    font-weight: 900;
+    color: var(--green);
+    letter-spacing: 5px;
+    text-shadow: 0 0 14px var(--green);
+    animation: flicker 5s infinite;
+  }
+
+  #game-title {
+    font-family: 'Orbitron', monospace;
+    font-size: 8px;
+    color: var(--dimgreen);
+    letter-spacing: 2px;
+  }
+
+  #hud {
+    display: grid;
+    grid-template-columns: 1fr 1fr 1fr 1fr;
+    padding: 5px 12px;
+    background: var(--panel);
+    border-bottom: 1px solid var(--border);
+    flex-shrink: 0;
+  }
+
+  .hud-item { display: flex; flex-direction: column; align-items: center; }
+  .hud-label { font-size: 7px; color: var(--dimgreen); letter-spacing: 1px; }
+  .hud-value {
+    font-family: 'Orbitron', monospace;
+    font-size: 12px; font-weight: 700;
+    color: var(--green);
+    text-shadow: 0 0 8px var(--green);
+  }
+  .hud-value.warn { color: var(--yellow); text-shadow: 0 0 8px var(--yellow); }
+  .hud-value.danger { color: var(--red); text-shadow: 0 0 8px var(--red); }
+
+  #canvas-wrap {
+    flex: 1;
+    position: relative;
+    overflow: hidden;
+    min-height: 0;
+  }
+
+  canvas { display: block; width: 100%; height: 100%; }
+
+  #overlay {
+    position: absolute; inset: 0;
+    display: flex; flex-direction: column;
+    align-items: center; justify-content: center;
+    background: rgba(0,10,4,0.93);
+    z-index: 10; padding: 16px;
+  }
+
+  #overlay h1 {
+    font-family: 'Orbitron', monospace;
+    font-size: 30px; font-weight: 900;
+    color: var(--green);
+    text-shadow: 0 0 20px var(--green), 0 0 50px var(--green);
+    letter-spacing: 5px; text-align: center;
+    margin-bottom: 4px;
+    animation: flicker 4s infinite;
+  }
+
+  .sub { font-size: 8px; color: var(--dimgreen); letter-spacing: 3px; margin-bottom: 18px; }
+
+  .instructions {
+    font-size: 10px; color: var(--dimgreen);
+    text-align: center; line-height: 2; margin-bottom: 18px;
+  }
+  .instructions span { color: var(--green); }
+
+  #diff-label { font-size: 8px; color: var(--dimgreen); letter-spacing: 3px; margin-bottom: 8px; }
+
+  #diff-buttons { display: flex; gap: 6px; margin-bottom: 8px; }
+
+  .diff-btn {
+    font-family: 'Orbitron', monospace;
+    font-size: 10px; font-weight: 700; letter-spacing: 1px;
+    padding: 8px 14px;
+    border: 1px solid var(--border);
+    background: transparent; color: var(--dimgreen);
+    cursor: pointer; transition: all 0.1s;
+  }
+  .diff-btn:hover { border-color: var(--green); color: var(--green); }
+  .diff-btn.selected.cadet { background: var(--green); color: var(--bg); border-color: var(--green); box-shadow: 0 0 14px var(--green); }
+  .diff-btn.selected.pilot { background: var(--yellow); color: #000; border-color: var(--yellow); box-shadow: 0 0 14px var(--yellow); }
+  .diff-btn.selected.ace { background: var(--red); color: #fff; border-color: var(--red); box-shadow: 0 0 14px var(--red); }
+
+  #diff-desc { font-size: 9px; color: var(--dimgreen); text-align: center; margin-bottom: 18px; min-height: 12px; }
+
+  #start-btn {
+    font-family: 'Orbitron', monospace;
+    font-size: 12px; font-weight: 700; letter-spacing: 3px;
+    color: var(--bg); background: var(--green);
+    border: none; padding: 13px 44px;
+    cursor: pointer; box-shadow: 0 0 22px var(--green);
+  }
+  #start-btn:active { transform: scale(0.97); }
+
+  #result-msg {
+    font-family: 'Orbitron', monospace;
+    font-size: 26px; font-weight: 900; letter-spacing: 3px;
+    margin-bottom: 6px; text-align: center;
+  }
+  #result-detail {
+    font-size: 10px; color: var(--dimgreen); letter-spacing: 1px;
+    margin-bottom: 6px; text-align: center; line-height: 1.9;
+  }
+  #result-score {
+    font-family: 'Orbitron', monospace; font-size: 20px; font-weight: 700;
+    color: var(--yellow); text-shadow: 0 0 12px var(--yellow); margin-bottom: 20px;
+  }
+  .back-btn {
+    font-family: 'Orbitron', monospace; font-size: 9px; letter-spacing: 2px;
+    color: var(--dimgreen); background: transparent;
+    border: 1px solid var(--border); padding: 7px 18px;
+    cursor: pointer; margin-top: 8px;
+  }
+
+  #controls-bar {
+    display: grid; grid-template-columns: 1fr 1fr 1fr;
+    gap: 5px; padding: 7px 8px;
+    background: var(--panel); border-top: 1px solid var(--border);
+    flex-shrink: 0;
+  }
+
+  .ctrl-btn {
+    font-family: 'Orbitron', monospace; font-size: 18px;
+    background: #001a0a; border: 1px solid var(--border);
+    color: var(--green); padding: 11px 0;
+    cursor: pointer; text-align: center;
+    user-select: none; -webkit-user-select: none;
+    text-shadow: 0 0 8px var(--green); line-height: 1;
+    transition: background 0.05s;
+  }
+  .ctrl-btn span { display: block; font-size: 7px; letter-spacing: 1px; color: var(--dimgreen); text-shadow: none; margin-top: 2px; }
+  .ctrl-btn:active { background: #00ff8822; border-color: var(--green); }
+
+  #scanlines {
+    position: absolute; inset: 0; pointer-events: none;
+    background: repeating-linear-gradient(0deg, transparent, transparent 2px, rgba(0,0,0,0.1) 2px, rgba(0,0,0,0.1) 4px);
+    z-index: 20;
+  }
+
+  @keyframes flicker {
+    0%,93%,100%{opacity:1} 94%{opacity:0.6} 95%{opacity:1} 96%{opacity:0.3} 97%{opacity:1}
+  }
+</style>
+</head>
+<body>
+<div id="app">
+  <div class="border-strip left"></div>
+  <div class="border-strip right"></div>
+  <div id="scanlines"></div>
+
+  <div id="header">
+    <div id="site-title">32953</div>
+    <div id="game-title">LUNAR LANDER</div>
+  </div>
+
+  <div id="hud">
+    <div class="hud-item"><div class="hud-label">FUEL</div><div class="hud-value" id="hud-fuel">100%</div></div>
+    <div class="hud-item"><div class="hud-label">SPEED</div><div class="hud-value" id="hud-vel">0.0</div></div>
+    <div class="hud-item"><div class="hud-label">ALT</div><div class="hud-value" id="hud-alt">---</div></div>
+    <div class="hud-item"><div class="hud-label">SCORE</div><div class="hud-value" id="hud-score">0</div></div>
+  </div>
+
+  <div id="canvas-wrap">
+    <canvas id="c"></canvas>
+    <div id="overlay">
+      <h1>LUNAR<br>LANDER</h1>
+      <div class="sub">32953.COM · GAME 01</div>
+      <div class="instructions">
+        <span>THRUST</span> — UP / SPACE / TAP ▲<br>
+        <span>STEER</span> — ◀ ▶ ARROW KEYS<br>
+        Land softly on the <span>GLOWING PAD</span>
+      </div>
+      <div id="diff-label">SELECT DIFFICULTY</div>
+      <div id="diff-buttons">
+        <button class="diff-btn cadet selected" onclick="selectDiff('cadet')">CADET</button>
+        <button class="diff-btn pilot" onclick="selectDiff('pilot')">PILOT</button>
+        <button class="diff-btn ace" onclick="selectDiff('ace')">ACE</button>
+      </div>
+      <div id="diff-desc">Slow gravity · plenty of fuel · wide pad</div>
+      <button id="start-btn" onclick="startGame()">LAUNCH MISSION</button>
+    </div>
+  </div>
+
+  <div id="controls-bar">
+    <button class="ctrl-btn" ontouchstart="keys.left=true;event.preventDefault()" ontouchend="keys.left=false" onmousedown="keys.left=true" onmouseup="keys.left=false">◀</button>
+    <button class="ctrl-btn" ontouchstart="keys.thrust=true;event.preventDefault()" ontouchend="keys.thrust=false" onmousedown="keys.thrust=true" onmouseup="keys.thrust=false">▲<span>THRUST</span></button>
+    <button class="ctrl-btn" ontouchstart="keys.right=true;event.preventDefault()" ontouchend="keys.right=false" onmousedown="keys.right=true" onmouseup="keys.right=false">▶</button>
+  </div>
+</div>
+
+<script>
+const canvas = document.getElementById('c');
+const ctx = canvas.getContext('2d');
+const wrap = document.getElementById('canvas-wrap');
+
+const DIFF = {
+  cadet: { gravity:0.004, thrust:0.028, fuel:200, burn:0.22, rotate:1.6, maxVel:3.0, padW:0.30, startY:0.10, mult:1, desc:'Slow gravity · plenty of fuel · wide pad' },
+  pilot: { gravity:0.007, thrust:0.034, fuel:130, burn:0.35, rotate:2.0, maxVel:2.2, padW:0.19, startY:0.09, mult:2, desc:'Standard gravity · normal fuel · medium pad' },
+  ace:   { gravity:0.012, thrust:0.042, fuel:100, burn:0.50, rotate:2.4, maxVel:1.6, padW:0.12, startY:0.07, mult:3, desc:'Hard gravity · limited fuel · tiny pad · LEADERBOARD' }
+};
+
+let currentDiff = 'cadet';
+let ship, terrain, landingPad, particles, gameRunning;
+let score = 0, animId, stars = null, countdown = 0;
+const keys = { thrust:false, left:false, right:false };
+
+document.addEventListener('keydown', e => {
+  if(e.key==='ArrowUp'||e.key===' '){keys.thrust=true;e.preventDefault();}
+  if(e.key==='ArrowLeft') keys.left=true;
+  if(e.key==='ArrowRight') keys.right=true;
+});
+document.addEventListener('keyup', e => {
+  if(e.key==='ArrowUp'||e.key===' ') keys.thrust=false;
+  if(e.key==='ArrowLeft') keys.left=false;
+  if(e.key==='ArrowRight') keys.right=false;
+});
+
+function selectDiff(d) {
+  currentDiff = d;
+  document.querySelectorAll('.diff-btn').forEach(b => b.className = `diff-btn ${b.classList[1]}`);
+  document.querySelector(`.diff-btn.${d}`).classList.add('selected');
+  document.getElementById('diff-desc').textContent = DIFF[d].desc;
+}
+
+function getDailySeed() {
+  const d = new Date();
+  return d.getFullYear()*10000 + (d.getMonth()+1)*100 + d.getDate();
+}
+
+function seededRand(seed) {
+  let s = seed >>> 0;
+  return () => { s = (Math.imul(1664525,s)+1013904223)>>>0; return s/0xffffffff; };
+}
+
+function resize() {
+  canvas.width = wrap.clientWidth;
+  canvas.height = wrap.clientHeight;
+  stars = null;
+}
+
+function generateTerrain(W, H, rand, d) {
+  const segments = 16, segW = W/segments;
+  const points = [];
+  for(let i=0;i<=segments;i++){
+    points.push({x:i*segW, y:H*0.68+rand()*(H*0.16)});
+  }
+  const padWidth = W*d.padW;
+  const padX = W*0.12+rand()*(W*0.60);
+  const padSeg = Math.floor(padX/segW);
+  const padH = H*0.70+rand()*(H*0.08);
+  const endSeg = Math.min(padSeg+Math.ceil(padWidth/segW), segments);
+  for(let i=padSeg;i<=endSeg;i++) if(points[i]) points[i].y=padH;
+  return { points, pad:{x:points[Math.min(padSeg,segments)].x, y:padH, width:padWidth} };
+}
+
+function startGame() {
+  document.getElementById('overlay').style.display='none';
+  score=0; gameRunning=false; particles=[];
+  resize();
+  const W=canvas.width, H=canvas.height;
+  const d=DIFF[currentDiff];
+  const seed = getDailySeed() + (currentDiff==='ace'?3:currentDiff==='pilot'?2:1);
+  const rand = seededRand(seed);
+  const t = generateTerrain(W,H,rand,d);
+  terrain=t.points; landingPad=t.pad;
+  ship={
+    x:W*0.25+rand()*W*0.5, y:H*d.startY,
+    vx:(rand()-0.5)*0.5, vy:0.1,
+    angle:0, fuel:d.fuel,
+    thrustOn:false, dead:false, landed:false
+  };
+  // Draw the scene once so player can see the layout
+  draw();
+  countdown = 3;
+  doCountdown();
+}
+
+function doCountdown() {
+  // Draw the current frame
+  draw();
+  // Draw countdown number on top
+  const W=canvas.width, H=canvas.height;
+  ctx.save();
+  const num = countdown > 0 ? String(countdown) : 'GO!';
+  const color = countdown > 0 ? '#ffcc00' : '#00ff88';
+  ctx.font = `900 ${Math.floor(H*0.18)}px 'Orbitron', monospace`;
+  ctx.textAlign = 'center';
+  ctx.textBaseline = 'middle';
+  ctx.shadowColor = color;
+  ctx.shadowBlur = 40;
+  ctx.fillStyle = color;
+  ctx.fillText(num, W/2, H*0.38);
+  ctx.restore();
+
+  if(countdown > 0) {
+    countdown--;
+    setTimeout(doCountdown, 900);
+  } else {
+    // "GO!" shown for 500ms then start
+    setTimeout(() => {
+      gameRunning = true;
+      cancelAnimationFrame(animId);
+      loop();
+    }, 500);
+  }
+}
+
+function loop() {
+  if(!gameRunning) return;
+  update(); draw();
+  animId = requestAnimationFrame(loop);
+}
+
+function update() {
+  if(ship.dead||ship.landed){updateParticles();return;}
+  const W=canvas.width, H=canvas.height;
+  const d=DIFF[currentDiff];
+
+  if(keys.left) ship.angle -= d.rotate;
+  if(keys.right) ship.angle += d.rotate;
+
+  ship.thrustOn = keys.thrust && ship.fuel>0;
+  if(ship.thrustOn) {
+    const rad=(ship.angle-90)*Math.PI/180;
+    ship.vx+=Math.cos(rad)*d.thrust;
+    ship.vy+=Math.sin(rad)*d.thrust;
+    ship.fuel=Math.max(0,ship.fuel-d.burn);
+    spawnFlame();
+  }
+
+  ship.vy+=d.gravity;
+  ship.x+=ship.vx; ship.y+=ship.vy;
+  if(ship.x<0) ship.x=W; if(ship.x>W) ship.x=0;
+  if(ship.y<0){ship.vy=Math.abs(ship.vy)*0.4; ship.y=1;}
+
+  const ty=getTerrainY(ship.x);
+  const spd=Math.sqrt(ship.vx*ship.vx+ship.vy*ship.vy);
+
+  if(ship.y+14>=ty) {
+    const onPad = ship.x>=landingPad.x && ship.x<=landingPad.x+landingPad.width;
+    const na=((ship.angle%360)+360)%360;
+    const angleOk=na<12||na>348;
+
+    if(onPad&&spd<d.maxVel&&angleOk) {
+      ship.landed=true; ship.vy=0; ship.vx=0; ship.y=ty-14;
+      const fp=ship.fuel/d.fuel;
+      score=Math.floor((500+Math.floor((d.maxVel-spd)/d.maxVel*400)+Math.floor(fp*400))*d.mult);
+      updateHUD();
+      setTimeout(()=>showResult(true,spd,fp),700);
+    } else {
+      ship.dead=true; explode(ship.x,ship.y);
+      setTimeout(()=>showResult(false,spd,0),1300);
+    }
+  }
+  updateParticles(); updateHUD();
+}
+
+function spawnFlame() {
+  const rad=(ship.angle+90)*Math.PI/180;
+  for(let i=0;i<3;i++) particles.push({
+    x:ship.x+Math.cos(rad)*13, y:ship.y+Math.sin(rad)*13,
+    vx:Math.cos(rad)*(1.5+Math.random()*2)+(Math.random()-.5),
+    vy:Math.sin(rad)*(1.5+Math.random()*2)+(Math.random()-.5),
+    life:1, decay:0.07+Math.random()*0.07, size:2+Math.random()*2,
+    color:Math.random()>.5?'#ffcc00':'#ff6600'
+  });
+}
+
+function explode(x,y) {
+  for(let i=0;i<80;i++){
+    const a=Math.random()*Math.PI*2, s=0.5+Math.random()*5;
+    particles.push({x,y,vx:Math.cos(a)*s,vy:Math.sin(a)*s,life:1,
+      decay:0.014+Math.random()*0.025,size:2+Math.random()*3,
+      color:['#ff2244','#ff6600','#ffcc00','#ffffff','#ff8800'][Math.floor(Math.random()*5)]});
+  }
+}
+
+function updateParticles() {
+  for(let i=particles.length-1;i>=0;i--){
+    const p=particles[i]; p.x+=p.vx; p.y+=p.vy; p.vy+=0.04; p.life-=p.decay;
+    if(p.life<=0) particles.splice(i,1);
+  }
+}
+
+function getTerrainY(x) {
+  const W=canvas.width, segW=W/(terrain.length-1);
+  const seg=Math.min(Math.floor(x/segW),terrain.length-2);
+  const t2=(x-seg*segW)/segW;
+  return terrain[seg].y+(terrain[seg+1].y-terrain[seg].y)*t2;
+}
+
+function updateHUD() {
+  const d=DIFF[currentDiff];
+  const fp=Math.ceil((ship.fuel/d.fuel)*100);
+  const fe=document.getElementById('hud-fuel');
+  fe.textContent=fp+'%';
+  fe.className='hud-value'+(fp<25?' danger':fp<50?' warn':'');
+  const spd=Math.sqrt(ship.vx*ship.vx+ship.vy*ship.vy).toFixed(1);
+  const ve=document.getElementById('hud-vel');
+  ve.textContent=spd;
+  ve.className='hud-value'+(spd>d.maxVel?' danger':spd>d.maxVel*.7?' warn':'');
+  const alt=Math.max(0,Math.floor(getTerrainY(ship.x)-ship.y));
+  document.getElementById('hud-alt').textContent=alt;
+  document.getElementById('hud-score').textContent=score;
+}
+
+// DRAW
+function draw() {
+  const W=canvas.width,H=canvas.height;
+  ctx.fillStyle='#000a04'; ctx.fillRect(0,0,W,H);
+  drawStars(W,H); drawTerrain(W,H); drawPad(); drawParticles();
+  if(!ship.dead) drawShip();
+}
+
+function drawStars(W,H) {
+  if(!stars){
+    stars=[]; const rand=seededRand(getDailySeed()+99);
+    for(let i=0;i<85;i++) stars.push({x:rand()*W,y:rand()*H*.65,r:.4+rand()*1.5,b:rand()});
+  }
+  const t=Date.now()/1100;
+  stars.forEach(s=>{
+    ctx.fillStyle=`rgba(0,255,136,${.25+s.b*.7*(.6+.4*Math.sin(t+s.x))})`;
+    ctx.beginPath(); ctx.arc(s.x,s.y,s.r,0,Math.PI*2); ctx.fill();
+  });
+}
+
+function drawTerrain(W,H) {
+  ctx.beginPath(); ctx.moveTo(0,H);
+  terrain.forEach(p=>ctx.lineTo(p.x,p.y));
+  ctx.lineTo(W,H); ctx.closePath();
+  ctx.fillStyle='#001508'; ctx.fill();
+  ctx.beginPath();
+  terrain.forEach((p,i)=>i===0?ctx.moveTo(p.x,p.y):ctx.lineTo(p.x,p.y));
+  ctx.strokeStyle='#00ff88'; ctx.lineWidth=1.5;
+  ctx.shadowColor='#00ff88'; ctx.shadowBlur=4; ctx.stroke(); ctx.shadowBlur=0;
+}
+
+function drawPad() {
+  const p=landingPad, d=DIFF[currentDiff];
+  const g=.5+.5*Math.sin(Date.now()/380);
+  ctx.shadowColor='#00ff88'; ctx.shadowBlur=8+g*14;
+  ctx.fillStyle=`rgba(0,255,136,${.1+g*.1})`;
+  ctx.fillRect(p.x,p.y-5,p.width,5);
+  ctx.strokeStyle=`rgba(0,255,136,${.75+g*.25})`;
+  ctx.lineWidth=2; ctx.strokeRect(p.x,p.y-5,p.width,5);
+  ctx.shadowBlur=0;
+  ctx.fillStyle=`rgba(0,255,136,${.45+g*.45})`;
+  ctx.font=`bold ${Math.max(8,canvas.width*.022)}px 'Share Tech Mono'`;
+  ctx.textAlign='center';
+  ctx.fillText(`▼ MAX ${d.maxVel} ▼`,p.x+p.width/2,p.y-8);
+}
+
+function drawParticles() {
+  particles.forEach(p=>{
+    ctx.globalAlpha=p.life; ctx.fillStyle=p.color;
+    ctx.shadowColor=p.color; ctx.shadowBlur=5;
+    ctx.fillRect(p.x-p.size/2,p.y-p.size/2,p.size,p.size);
+  });
+  ctx.globalAlpha=1; ctx.shadowBlur=0;
+}
+
+function drawShip() {
+  const s=ship, sc=Math.min(canvas.width,canvas.height)/420, sz=13*sc;
+  ctx.save(); ctx.translate(s.x,s.y); ctx.rotate(s.angle*Math.PI/180);
+  if(s.thrustOn){
+    const fl=(9+Math.random()*10)*sc;
+    ctx.beginPath(); ctx.moveTo(-4*sc,sz*.8); ctx.lineTo(0,sz*.8+fl); ctx.lineTo(4*sc,sz*.8);
+    ctx.fillStyle=Math.random()>.5?'#ffcc00':'#ff8800';
+    ctx.shadowColor='#ff6600'; ctx.shadowBlur=14; ctx.fill(); ctx.shadowBlur=0;
+  }
+  ctx.shadowColor='#00ff88'; ctx.shadowBlur=10;
+  ctx.strokeStyle='#00ff88'; ctx.fillStyle='#001a0a'; ctx.lineWidth=1.5*sc;
+  ctx.beginPath();
+  ctx.moveTo(0,-sz); ctx.lineTo(sz*.55,sz*.5); ctx.lineTo(sz*.28,sz*.8);
+  ctx.lineTo(-sz*.28,sz*.8); ctx.lineTo(-sz*.55,sz*.5); ctx.closePath();
+  ctx.fill(); ctx.stroke();
+  ctx.beginPath();
+  ctx.moveTo(sz*.28,sz*.7); ctx.lineTo(sz*.65,sz);
+  ctx.moveTo(-sz*.28,sz*.7); ctx.lineTo(-sz*.65,sz); ctx.stroke();
+  ctx.beginPath(); ctx.arc(0,-sz*.2,sz*.22,0,Math.PI*2);
+  ctx.fillStyle='rgba(0,255,136,0.15)'; ctx.fill(); ctx.stroke();
+  ctx.shadowBlur=0; ctx.restore();
+}
+
+function showResult(success, spd, fp) {
+  gameRunning=false;
+  const d=DIFF[currentDiff];
+  const ov=document.getElementById('overlay');
+  ov.innerHTML=''; ov.style.display='flex';
+
+  const msg=document.createElement('div'); msg.id='result-msg';
+  msg.style.color=success?'#00ff88':'#ff2244';
+  msg.style.textShadow=`0 0 20px ${success?'#00ff88':'#ff2244'}`;
+  msg.textContent=success?'✓ LANDED!':'✗ CRASHED!';
+
+  const det=document.createElement('div'); det.id='result-detail';
+  det.innerHTML=success
+    ?`DIFFICULTY: ${currentDiff.toUpperCase()} ×${d.mult}<br>SPEED: ${spd.toFixed(2)} · FUEL: ${Math.floor(fp*100)}%`
+    :`IMPACT: ${spd.toFixed(2)} — NEED &lt; ${d.maxVel}`;
+
+  const sc2=document.createElement('div'); sc2.id='result-score';
+  sc2.textContent=success?`SCORE: ${score}`:'SCORE: 0';
+
+  const btn=document.createElement('button'); btn.id='start-btn';
+  btn.textContent='FLY AGAIN';
+  btn.onclick=()=>{ov.innerHTML='';ov.style.display='none';startGame();};
+
+  const back=document.createElement('button'); back.className='back-btn';
+  back.textContent='CHANGE DIFFICULTY';
+  back.onclick=()=>location.reload();
+
+  ov.appendChild(msg); ov.appendChild(det); ov.appendChild(sc2); ov.appendChild(btn); ov.appendChild(back);
+}
+
+resize();
+window.addEventListener('resize',()=>resize());
+</script>
+</body>
+</html>
