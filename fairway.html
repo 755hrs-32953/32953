@@ -23,10 +23,11 @@
     display:flex; align-items:center; justify-content:center;
     overflow:hidden;
     font-family:'Press Start 2P', monospace;
-    position:fixed; top:0; left:0; right:0; bottom:0;
   }
   #app {
     width:380px;
+    height:100%;
+    max-height:100vh;
     background:#1a1a40;
     display:flex; flex-direction:column;
     position:relative; overflow:hidden;
@@ -102,14 +103,7 @@
 
 <script>
 // ── iOS height fix ──────────────────────────────────────────
-function fixHeight() {
-  const app = document.getElementById('app');
-  const h = window.innerHeight;
-  app.style.height = h+'px'; app.style.maxHeight = h+'px';
-}
-fixHeight();
-window.addEventListener('resize', fixHeight);
-window.addEventListener('orientationchange', ()=>setTimeout(fixHeight,200));
+// Height handled by CSS (100% / 100vh), no JS override needed
 
 const nd = new Date();
 document.getElementById('bot-date').textContent =
@@ -120,10 +114,12 @@ const canvas = document.getElementById('c');
 const ctx    = canvas.getContext('2d');
 const wrap   = document.getElementById('game-wrap');
 function resize() {
-  canvas.width  = wrap.clientWidth;
-  canvas.height = wrap.clientHeight;
+  const w = wrap.clientWidth  || 380;
+  const h = wrap.clientHeight || 580;
+  canvas.width  = w;
+  canvas.height = h;
 }
-window.addEventListener('resize', ()=>{ resize(); });
+window.addEventListener('resize', ()=>{ resize(); draw(); });
 
 // ── SEED ────────────────────────────────────────────────────
 function getDailySeed() {
@@ -201,6 +197,13 @@ let ball = { x:0, y:0, vx:0, vy:0, flying:false, landed:false };
 let ballTrail = [];
 let cameraX = 0, cameraY = 0;
 let cameraTargetX = 0, cameraTargetY = 0;
+
+// ── ZOOM STATE ────────────────────────────────────────────────
+let currentZoom   = 1.0;   // actual zoom applied this frame
+let targetZoom    = 1.0;   // zoom we're animating toward
+let zoomCx        = 0;     // world-space center of zoom (green center)
+let zoomCy        = 0;
+const ZOOM_SPEED  = 0.07;  // lerp factor per frame (smooth ease-out)
 
 // Drag state
 let dragStart = null, dragCurrent = null;
@@ -390,6 +393,20 @@ function draw() {
   if (!hole.W) return;
   const W = canvas.width, H = canvas.height;
   ctx.clearRect(0, 0, W, H);
+
+  // Lerp zoom toward target
+  currentZoom += (targetZoom - currentZoom) * ZOOM_SPEED;
+
+  // Apply zoom transform centered on zoomCx/zoomCy (green center in world space)
+  // All world drawing happens inside this transform
+  ctx.save();
+  if (Math.abs(currentZoom - 1.0) > 0.001) {
+    // Translate so zoom center maps to canvas center
+    ctx.translate(W * 0.5, H * 0.5);
+    ctx.scale(currentZoom, currentZoom);
+    ctx.translate(-zoomCx, -zoomCy);
+  }
+
   drawTerrain();
   drawTrees();
   drawHole();
@@ -399,6 +416,9 @@ function draw() {
   if (phase === 'club') drawClubMenu();
   if (phase === 'aim' || phase === 'putting') drawAimGuide();
   if (phase === 'shot') drawFlight();
+
+  ctx.restore(); // back to unzoomed for HUD
+
   drawHUD();
 }
 
@@ -844,11 +864,17 @@ function drawHUD() {
   ctx.strokeStyle = '#4a3fa0'; ctx.lineWidth = 2;
   ctx.beginPath(); ctx.moveTo(0,32); ctx.lineTo(W,32); ctx.stroke();
 
-  // Yardage to pin
-  const distPx  = Math.hypot(ball.x - h.pinX, ball.y - h.pinY);
+  // Distance to cup — world coords, unaffected by zoom transform
+  const cx2 = h.cupX || h.pinX, cy2 = h.cupY || h.pinY;
+  const distPx  = Math.hypot(ball.x - cx2, ball.y - cy2);
   const distYds = Math.round(distPx / h.pxPerYard);
+  // On green: show feet (more meaningful for putting)
+  const onGreen = phase === 'putting' || (phase === 'shot' && isOnGreen(ball.x, ball.y, h));
+  const distLabel = onGreen
+    ? `${Math.round(distYds * 3)}FT`   // yards → feet
+    : `${distYds}YD`;
   ctx.fillStyle = '#54ffff'; ctx.font = `10px 'Press Start 2P'`; ctx.textAlign = 'left';
-  ctx.fillText(`${distYds}YD`, 8, 21);
+  ctx.fillText(distLabel, 8, 21);
 
   // Stroke count
   ctx.fillStyle = '#ffff54'; ctx.textAlign = 'center';
@@ -887,7 +913,17 @@ function getCanvasPos(e) {
   const rect = canvas.getBoundingClientRect();
   const sx = canvas.width / rect.width, sy = canvas.height / rect.height;
   const src = e.touches ? e.touches[0] : e;
-  return { x:(src.clientX - rect.left)*sx, y:(src.clientY - rect.top)*sy };
+  const screenX = (src.clientX - rect.left) * sx;
+  const screenY = (src.clientY - rect.top)  * sy;
+  // Unproject screen coords to world coords through zoom transform
+  // world = (screen - canvasCenter) / zoom + zoomCenter
+  if (Math.abs(currentZoom - 1.0) > 0.001) {
+    const W = canvas.width, H = canvas.height;
+    const wx = (screenX - W * 0.5) / currentZoom + zoomCx;
+    const wy = (screenY - H * 0.5) / currentZoom + zoomCy;
+    return { x: wx, y: wy };
+  }
+  return { x: screenX, y: screenY };
 }
 
 canvas.addEventListener('mousedown',  onDown);
@@ -1016,6 +1052,7 @@ function update() {
 
   // OB check
   if (isOB(ball.x, ball.y, h)) {
+    zoomOut();
     setTimeout(() => showHoleResult('ob'), 400);
     phase = 'hole_out';
     return;
@@ -1044,11 +1081,12 @@ function update() {
     if (distToCup < 6) {
       const result = strokeCount === 1 ? 'hio' : strokeCount === 2 ? 'birdie' : strokeCount === 3 ? 'par' : 'bogey';
       phase = 'hole_out';
+      zoomOut();
       setTimeout(() => showHoleResult(result), 600);
       return;
     }
 
-    // Landed on green — switch to putting
+    // Landed on green — switch to putting and zoom in
     if (terrain === 'green') {
       selectedClub = 4;
       phase = 'putting';
@@ -1057,10 +1095,12 @@ function update() {
         driveProximityYards = Math.round(distToPin / h.pxPerYard * 3);
         teeShot = false;
       }
+      // Trigger zoom: fit green snugly in canvas with margin
+      zoomToGreen();
       return;
     }
 
-    // Rolled off green while putting — stay in putting mode, no club change
+    // Rolled off green while putting — stay in putting mode
     if (isPutting) {
       phase = 'putting';
       return;
@@ -1076,6 +1116,7 @@ function update() {
     // Max strokes = 5 (bogey+ = 0 pts)
     if (strokeCount >= 5) {
       phase = 'hole_out';
+      zoomOut();
       setTimeout(() => showHoleResult('bogey'), 400);
       return;
     }
@@ -1093,6 +1134,25 @@ function suggestClub(distPx, h) {
   if (distYds > 125) return 1;
   if (distYds > 90)  return 2;
   return 3;
+}
+
+// ── ZOOM HELPERS ─────────────────────────────────────────────
+function zoomToGreen() {
+  const h = hole;
+  const W = canvas.width, H = canvas.height;
+  // Center zoom on green center (pinX/pinY)
+  zoomCx = h.pinX;
+  zoomCy = h.pinY;
+  // Calculate zoom so green (with margin) fills the canvas
+  // Largest blob extent ≈ greenR * 1.5 (blobs can extend up to 140%)
+  const greenExtent = h.greenR * 1.6;
+  const zoomX = (W * 0.5) / greenExtent;
+  const zoomY = (H * 0.45) / greenExtent;
+  targetZoom = Math.min(zoomX, zoomY, 4.0);  // cap at 4x
+}
+
+function zoomOut() {
+  targetZoom = 1.0;
 }
 
 // ── HOLE RESULT ──────────────────────────────────────────────
@@ -1222,6 +1282,8 @@ function initGame(resetAll) {
   ball = { x: hole.teeX, y: hole.teeY, vx:0, vy:0 };
   ballTrail = [];
   ballMode = 'flight';
+  currentZoom = 1.0;
+  targetZoom  = 1.0;
   strokeCount = 0;
   holeScore = 0;
   driveProximityYards = null;
@@ -1282,8 +1344,11 @@ function showStart() {
 }
 
 // ── BOOT ─────────────────────────────────────────────────────
-resize();
-showStart();
+// Defer until browser has laid out the DOM (fixes iframe/sandbox sizing)
+requestAnimationFrame(() => {
+  resize();
+  showStart();
+});
 </script>
 </body>
 </html>
