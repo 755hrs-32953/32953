@@ -1,0 +1,1058 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
+<title>32953 — STONE COLD</title>
+<style>
+  @import url('https://fonts.googleapis.com/css2?family=Press+Start+2P&display=swap');
+
+  :root {
+    --c64-blue:   #3568b4;
+    --c64-purple: #7b68ee;
+    --c64-dark:   #4a3fa0;
+    --c64-yellow: #ffff54;
+    --c64-white:  #ffffff;
+    --c64-green:  #54ff54;
+    --c64-red:    #ff5454;
+    --c64-cyan:   #54ffff;
+  }
+
+  * { margin:0; padding:0; box-sizing:border-box; }
+
+  html, body {
+    width:100%; height:100%;
+    background:#000;
+    display:flex; align-items:center; justify-content:center;
+    overflow:hidden;
+    font-family:'Press Start 2P', monospace;
+    position:fixed; top:0; left:0; right:0; bottom:0;
+  }
+
+  #app {
+    width:380px;
+    background:#1a1a40;
+    display:flex; flex-direction:column;
+    position:relative; overflow:hidden;
+    border:3px solid var(--c64-dark);
+    box-shadow:0 0 40px #7b68ee44;
+  }
+
+  #header {
+    background:var(--c64-purple);
+    border-bottom:4px solid var(--c64-dark);
+    padding:6px 12px;
+    display:flex; align-items:center; justify-content:space-between;
+    flex-shrink:0;
+  }
+  /* MIN 10px rule: logo exception at 13px */
+  #logo { font-size:13px; color:#fff; letter-spacing:3px; text-shadow:2px 2px 0 var(--c64-dark); }
+  #game-label { font-size:10px; color:#d4c0ff; letter-spacing:2px; }
+/* MIN 10px */
+#game-wrap { flex:1; position:relative; overflow:hidden; min-height:0; }
+  canvas { display:block; width:100%; height:100%; image-rendering:pixelated; }
+
+  /* OVERLAY */
+  #overlay {
+    position:absolute; inset:0;
+    background:rgba(0,0,40,0.94);
+    display:flex; flex-direction:column;
+    align-items:center; justify-content:center;
+    z-index:20; padding:16px; gap:8px;
+  }
+
+  #ov-title {
+    font-size:20px; color:#fff; letter-spacing:4px;
+    text-align:center; text-shadow:3px 3px 0 var(--c64-dark);
+    line-height:1.7; margin-bottom:4px;
+  }
+  /* MIN 10px */
+  #ov-sub { font-size:10px; color:#b8a8ff; letter-spacing:2px; margin-bottom:8px; }
+
+  .ov-rule { font-size:10px; color:var(--c64-cyan); letter-spacing:1px; text-align:center; line-height:2.2; }
+  .ov-rule span { color:var(--c64-yellow); }
+  .ov-section-label { font-size:10px; color:#b8a8ff; letter-spacing:2px; margin-top:6px; }
+
+  #ov-diff { display:flex; gap:6px; margin:4px 0; }
+  .diff-btn {
+    font-family:'Press Start 2P',monospace; font-size:10px; padding:8px 10px;
+    border:2px solid #4a3fa0; background:transparent; color:#b8a8ff; cursor:pointer;
+  }
+  .diff-btn.selected.club { background:var(--c64-green); color:#000; border-color:var(--c64-green); }
+  .diff-btn.selected.bonspiel { background:var(--c64-yellow); color:#000; border-color:var(--c64-yellow); }
+  .diff-btn.selected.olympic { background:var(--c64-red); color:#fff; border-color:var(--c64-red); }
+
+  #ov-desc { font-size:10px; color:#b8a8ff; text-align:center; letter-spacing:1px; min-height:12px; }
+
+  .big-btn {
+    font-family:'Press Start 2P',monospace; font-size:11px; padding:11px 28px;
+    background:var(--c64-yellow); color:#000; border:3px solid #fff;
+    cursor:pointer; letter-spacing:2px; box-shadow:4px 4px 0 var(--c64-dark);
+  }
+  .big-btn:active { transform:translate(2px,2px); box-shadow:2px 2px 0 var(--c64-dark); }
+
+  .small-btn {
+    font-family:'Press Start 2P',monospace; font-size:10px; padding:8px 14px;
+    background:transparent; color:var(--c64-cyan);
+    border:2px solid var(--c64-cyan); cursor:pointer; letter-spacing:1px;
+  }
+  .small-btn:active { background:var(--c64-cyan); color:#000; }
+
+  /* MIN 10px result screen */
+  #ov-result  { font-size:18px; letter-spacing:3px; text-align:center; margin-bottom:3px; }
+  #ov-breakdown { font-size:10px; color:var(--c64-cyan); text-align:center; line-height:2.2; letter-spacing:1px; margin-bottom:6px; }
+  #ov-score-big { font-size:16px; color:var(--c64-yellow); letter-spacing:3px; text-shadow:2px 2px 0 var(--c64-dark); margin-bottom:12px; }
+
+  #botbar {
+    background:var(--c64-purple);
+    border-top:4px solid var(--c64-dark);
+    padding:4px 10px;
+    display:flex; justify-content:space-between; align-items:center;
+    flex-shrink:0;
+  }
+  /* MIN 10px */
+#bot-date { font-size:10px; color:#d4c0ff; letter-spacing:1px; }
+
+  @keyframes blink { 0%,49%{opacity:1} 50%,100%{opacity:0} }
+</style>
+</head>
+<body>
+<div id="app">
+  <div id="header">
+    <div id="logo">32953</div>
+    <div id="game-label">STONE COLD</div>
+  </div>
+
+
+  <div id="game-wrap">
+    <canvas id="c"></canvas>
+    <div id="overlay"></div>
+  </div>
+
+  <div id="botbar">
+    <div id="bot-date"></div>
+    <div id="pv-score" style="font-size:10px;color:#ffff54;letter-spacing:1px;">SCORE: 0</div>
+  </div>
+</div>
+
+<script>
+// ── iOS height fix ─────────────────────────────────────────
+function fixHeight() {
+  const app = document.getElementById('app');
+  const h = window.innerHeight;
+  app.style.height = h+'px'; app.style.maxHeight = h+'px';
+}
+fixHeight();
+window.addEventListener('resize', fixHeight);
+window.addEventListener('orientationchange', ()=>setTimeout(fixHeight,200));
+
+const nd = new Date();
+document.getElementById('bot-date').textContent =
+  nd.toLocaleDateString('en-US',{month:'short',day:'numeric'}).toUpperCase();
+
+// ── PHYSICS — Olympic ice always ──────────────────────────
+// friction 0.9963 = stone glides full sheet length beautifully
+// curlMag 0.00180 = dramatic curl building over distance  
+// maxPow 30 = tiny drag sends stone the full length
+const PHYSICS = { friction:0.9963, curlMag:0.00180, base:1200, maxPow:18 };
+const DIFF = { olympic: PHYSICS };
+let currentDiff = 'olympic';
+
+// ── CANVAS ─────────────────────────────────────────────────
+const canvas = document.getElementById('c');
+const ctx    = canvas.getContext('2d');
+const wrap   = document.getElementById('game-wrap');
+
+function resize() {
+  canvas.width  = wrap.clientWidth;
+  canvas.height = wrap.clientHeight;
+}
+window.addEventListener('resize', ()=>{ resize(); buildSheet(); });
+
+// ── SEED ───────────────────────────────────────────────────
+function getDailySeed() {
+  const d = new Date();
+  return d.getFullYear()*10000+(d.getMonth()+1)*100+d.getDate();
+}
+function seededRand(seed) {
+  let s=seed>>>0;
+  return ()=>{ s=(Math.imul(1664525,s)+1013904223)>>>0; return s/0xffffffff; };
+}
+
+// ── SHEET ──────────────────────────────────────────────────
+let S = {};
+function buildSheet() {
+  const W=canvas.width, H=canvas.height;
+  const gutter = W*0.12;
+  S = {
+    W, H,
+    iceL: gutter, iceR: W-gutter, iceW: W-gutter*2,
+    iceT: H*0.01, iceB: H*0.99,
+    hx: W*0.5, hy: H*0.17,
+    r4: W*0.13, r3: W*0.097, r2: W*0.064, r1: W*0.032,
+    hogY: H*0.35,
+    hackY:  H*0.87,
+    hackLx: W*0.5 - W*0.07,
+    hackRx: W*0.5 + W*0.07,
+    sr: W*0.036,   // stone radius — small
+    gutter,
+  };
+}
+
+// ── COLORS ────────────────────────────────────────────────
+const COL_YOU = { body:'#ffff54', ring:'#aa8800', handle:'#ff8800', shine:'#fff',    team:'you' };
+const COL_OPP = { body:'#ff5454', ring:'#880000', handle:'#ffaaaa', shine:'#ffcccc', team:'opp' };
+
+// ── SPECTATORS ────────────────────────────────────────────
+let spectators = [];
+const PARKA_COLS = ['#ff5454','#54ffff','#54ff54','#ffff54','#ff88ff','#ffffff','#ff8800','#aa54ff'];
+const HAT_COLS   = ['#ffffff','#ffff54','#ff5454','#54ffff','#aaaaaa','#ff88ff','#88ff88'];
+
+function generateSpectators() {
+  const rand = seededRand(getDailySeed()+77);
+  spectators = [];
+  const H = canvas.height;
+  const perRow = Math.floor(H/26);
+  for(let side=0;side<2;side++) {
+    for(let row=0;row<2;row++) {
+      for(let i=0;i<perRow;i++) {
+        const x = side===0
+          ? S.gutter*0.22+row*10+rand()*3
+          : S.iceR+S.gutter*0.22+row*10+rand()*3;
+        spectators.push({
+          x, y: 18+i*25+rand()*5,
+          parka: PARKA_COLS[Math.floor(rand()*PARKA_COLS.length)],
+          hat:   HAT_COLS[Math.floor(rand()*HAT_COLS.length)],
+          scarfCol: PARKA_COLS[Math.floor(rand()*PARKA_COLS.length)],
+          scarf: rand()>0.45,
+          wave:  rand()*Math.PI*2,
+          waving: rand()>0.65,
+        });
+      }
+    }
+  }
+}
+
+// ── STONE PLACEMENT (no overlap) ─────────────────────────
+function generateStones() {
+  const rand = seededRand(getDailySeed());
+  const placed = [];
+  const minDist = S.sr*2.8;
+
+  function tryPlace(team, attempts) {
+    for(let a=0;a<attempts;a++) {
+      const angle=rand()*Math.PI*2;
+      const dist=rand()*S.r4*1.7;
+      const x=S.hx+Math.cos(angle)*dist;
+      const y=S.hy+Math.sin(angle)*dist;
+      if(x<S.iceL+S.sr||x>S.iceR-S.sr) continue;
+      if(placed.every(p=>Math.hypot(p.x-x,p.y-y)>=minDist)){
+        placed.push({x,y,vx:0,vy:0,spin:0,angle:rand()*Math.PI*2,col:team==='you'?COL_YOU:COL_OPP});
+        return true;
+      }
+    }
+    return false;
+  }
+  for(let i=0;i<4;i++) tryPlace('opp',80);
+  for(let i=0;i<3;i++) tryPlace('you',80);
+  return placed;
+}
+
+// ── GAME STATE ─────────────────────────────────────────────
+let stones=[], playerStone=null, animId;
+let phase='start';
+let handle=null, hack=null, hackX=0, hackY=0;
+let dragStart=null, dragCurrent=null, dragAnchorX=0, dragAnchorY=0;
+let gameScore=0, frameCount=0;
+let sweepLeft=false, sweepFwd=false, sweepRight=false;
+let sweepActiveUntil = 0;        // timestamp when reduced friction expires
+let sweepSideDir = 0;            // -1 left, 0 none, +1 right
+const FRICTION_NORMAL  = 0.9963; // standard Olympic ice
+const FRICTION_SWEPT   = 0.9986; // swept ice — stone travels further, straighter
+const SWEEP_DURATION   = 250;    // ms of reduced friction per tap
+const SWEEP_SIDE_NUDGE = 0.006;  // tiny lateral nudge — fine tuning only
+
+// ── GAME LOOP ─────────────────────────────────────────────
+function gameLoop() {
+  frameCount++;
+  update();
+  draw();
+  animId = requestAnimationFrame(gameLoop);
+}
+
+// ── UPDATE — full multi-stone collision ───────────────────
+function update() {
+  if(phase!=='throwing') return;
+  const d = DIFF[currentDiff];
+  const curlSign = handle==='in' ? 1 : -1;
+
+  // Build list of ALL moving stones (player + displaced placed)
+  const allMoving = [];
+  if(playerStone) allMoving.push(playerStone);
+  stones.forEach(s=>{ if(Math.hypot(s.vx,s.vy)>0.01) allMoving.push(s); });
+
+  // Apply physics to every moving stone
+  const allStones = playerStone ? [playerStone, ...stones] : [...stones];
+
+  allStones.forEach(s=>{
+    if(Math.hypot(s.vx,s.vy)<0.01&&s!==playerStone) return;
+
+    // Curl only on player stone (placed stones slide straight after collision)
+    if(s===playerStone){
+      s.vx += curlSign * Math.abs(s.vy) * d.curlMag;
+      // Sweep impulses — applied once then cleared
+      // Friction-based sweeping — reduces ice resistance temporarily
+      const now = Date.now();
+      const isSwept = now < sweepActiveUntil;
+      const activeFriction = isSwept ? FRICTION_SWEPT : FRICTION_NORMAL;
+      // Override the friction already applied above for player stone
+      // (undo normal friction, apply swept friction instead)
+      s.vx = s.vx / d.friction * activeFriction;
+      s.vy = s.vy / d.friction * activeFriction;
+      // Tiny lateral nudge — fine tuning only, no stackup
+      if(sweepLeft)  { s.vx -= SWEEP_SIDE_NUDGE; sweepLeft=false; }
+      if(sweepRight) { s.vx += SWEEP_SIDE_NUDGE; sweepRight=false; }
+      if(sweepFwd)   sweepFwd=false; // forward handled by friction alone
+    }
+
+    s.vx *= d.friction;
+    s.vy *= d.friction;
+    s.x  += s.vx;
+    s.y  += s.vy;
+
+    // Spin: proportional to speed, direction based on which stone
+    const spd = Math.hypot(s.vx,s.vy);
+    if(spd>0.05){
+      const spinDir = s===playerStone ? (handle==='in'?1:-1) : (s.spin>0?1:-1);
+      s.angle += spinDir * spd * 0.08;
+      s.spin = spinDir * spd;
+    } else {
+      s.angle += s.spin*0.3;
+      s.spin *= 0.85;
+      if(Math.abs(s.spin)<0.01) s.spin=0;
+    }
+  });
+
+  // ── COLLISION: every stone vs every other stone ─────────
+  for(let i=0;i<allStones.length;i++){
+    for(let j=i+1;j<allStones.length;j++){
+      const a=allStones[i], b=allStones[j];
+      const dx=b.x-a.x, dy=b.y-a.y;
+      const dist=Math.hypot(dx,dy);
+      const minD=S.sr*2;
+      if(dist<minD&&dist>0.01){
+        const nx=dx/dist, ny=dy/dist;
+        // Relative velocity
+        const dvx=a.vx-b.vx, dvy=a.vy-b.vy;
+        const dot=dvx*nx+dvy*ny;
+        if(dot>0){
+          // Elastic-ish collision — transfer momentum
+          a.vx -= dot*nx;
+          a.vy -= dot*ny;
+          b.vx += dot*nx*0.88;
+          b.vy += dot*ny*0.88;
+          // Impart spin to struck stone based on impact
+          b.spin = dot * (Math.random()>0.5?1:-1);
+          // Separate overlapping stones
+          const overlap=(minD-dist)*0.5;
+          a.x -= nx*overlap; a.y -= ny*overlap;
+          b.x += nx*overlap; b.y += ny*overlap;
+        }
+      }
+    }
+  }
+
+  // Check stop condition — ALL stones stopped
+  const allStopped = allStones.every(s=>Math.hypot(s.vx,s.vy)<0.06);
+
+  // Player stone out of bounds
+  if(playerStone){
+    if(playerStone.x<S.iceL-S.sr||playerStone.x>S.iceR+S.sr||playerStone.y<S.iceT-S.sr*2){
+      playerStone.vx=0; playerStone.vy=0;
+    }
+  }
+
+  if(allStopped){
+    // Settle player stone into placed stones if valid
+    if(playerStone){
+      const pastHog = playerStone.y < S.hogY;
+      const inBounds = playerStone.x>S.iceL&&playerStone.x<S.iceR&&playerStone.y>S.iceT;
+      if(pastHog&&inBounds){
+        stones.push({...playerStone,vx:0,vy:0,spin:0});
+      }
+      playerStone=null;
+    }
+    // Remove stones knocked out of bounds
+    const before = stones.length;
+    stones = stones.filter(s=>
+      s.x>S.iceL-S.sr&&s.x<S.iceR+S.sr&&s.y>S.iceT-S.sr&&s.y<S.iceB+S.sr
+    );
+
+    phase='result';
+    const scoring=calcScore(stones);
+    gameScore=calcFinalScore(scoring);
+    document.getElementById('pv-score').textContent='SCORE: '+gameScore;
+    setTimeout(()=>showResult(scoring),900);
+  }
+}
+
+// ── SCORING ───────────────────────────────────────────────
+function distFromCenter(stone){ return Math.hypot(stone.x-S.hx,stone.y-S.hy); }
+
+function calcScore(allStones){
+  const inHouse=allStones.filter(s=>distFromCenter(s)<S.r4);
+  if(!inHouse.length) return {youCount:0,yourScoring:[],totalDist:0};
+  const oppStones=inHouse.filter(s=>s.col.team==='opp');
+  const oppClosest=oppStones.length?Math.min(...oppStones.map(s=>distFromCenter(s))):Infinity;
+  const sorted=[...inHouse].sort((a,b)=>distFromCenter(a)-distFromCenter(b));
+  if(sorted[0].col.team==='opp') return {youCount:0,yourScoring:[],totalDist:0,oppClosest};
+  const yourScoring=inHouse.filter(s=>s.col.team==='you'&&distFromCenter(s)<oppClosest);
+  const totalDist=yourScoring.reduce((sum,s)=>sum+distFromCenter(s),0);
+  return {youCount:yourScoring.length,yourScoring,totalDist,oppClosest};
+}
+
+function calcFinalScore(scoring){
+  if(!scoring.youCount) return 0;
+  const d=DIFF[currentDiff];
+  let pts=0;
+  scoring.yourScoring.forEach(s=>{
+    pts+=Math.floor(400*Math.max(0,1-distFromCenter(s)/S.r4));
+  });
+  return d.base+pts+scoring.youCount*100;
+}
+
+// ── DRAW ──────────────────────────────────────────────────
+function draw(){
+  const W=canvas.width,H=canvas.height;
+  ctx.clearRect(0,0,W,H);
+  ctx.fillStyle='#1a1030'; ctx.fillRect(0,0,W,H);
+  drawSpectators();
+  drawIce();
+  drawHouse();
+  drawHogLine();
+  drawHacks();
+  drawStones();
+  if(playerStone&&phase==='throwing'){ drawSingleStone(playerStone); drawSweepButtons(); }
+  if(phase==='throw') drawAimGuide();
+  if(phase==='result') drawScoringHighlight();
+  if(phase==='handle') drawHandlePrompt();
+  if(phase==='hack') drawHackPrompt();
+}
+
+// ── SPECTATORS ────────────────────────────────────────────
+function drawSpectators(){
+  spectators.forEach(sp=>{
+    const woff=sp.waving?Math.sin(frameCount*0.05+sp.wave)*2:0;
+    const x=sp.x, y=sp.y+woff;
+    ctx.fillStyle=sp.parka;  ctx.fillRect(Math.round(x-4),Math.round(y-4),9,10);
+    ctx.fillStyle='#f0c87a'; ctx.fillRect(Math.round(x-2),Math.round(y-9),5,5);
+    ctx.fillStyle=sp.hat;    ctx.fillRect(Math.round(x-3),Math.round(y-12),7,4);
+                             ctx.fillRect(Math.round(x-2),Math.round(y-14),5,3);
+    if(sp.scarf){ ctx.fillStyle=sp.scarfCol; ctx.fillRect(Math.round(x-4),Math.round(y-2),9,2); }
+    if(sp.waving){ ctx.fillStyle=sp.parka; ctx.fillRect(Math.round(x+4),Math.round(y-6+Math.sin(frameCount*0.08+sp.wave)*4-4),3,5); }
+  });
+}
+
+// ── ICE ───────────────────────────────────────────────────
+function drawIce(){
+  ctx.fillStyle='#dff0ff';
+  ctx.fillRect(S.iceL,S.iceT,S.iceW,S.iceB-S.iceT);
+  ctx.strokeStyle='rgba(100,150,220,0.10)'; ctx.lineWidth=1;
+  for(let y=S.iceT;y<S.iceB;y+=5){
+    ctx.beginPath(); ctx.moveTo(S.iceL,y); ctx.lineTo(S.iceR,y); ctx.stroke();
+  }
+  ctx.strokeStyle='rgba(50,100,200,0.22)'; ctx.lineWidth=1.5; ctx.setLineDash([8,10]);
+  ctx.beginPath(); ctx.moveTo(S.hx,S.iceT); ctx.lineTo(S.hx,S.iceB); ctx.stroke();
+  ctx.setLineDash([]);
+  ctx.strokeStyle='#3568b4'; ctx.lineWidth=3;
+  ctx.strokeRect(S.iceL,S.iceT,S.iceW,S.iceB-S.iceT);
+}
+
+// ── HOUSE ─────────────────────────────────────────────────
+function drawHouse(){
+  [{r:S.r4,col:'#ff5454'},{r:S.r3,col:'#ffffff'},{r:S.r2,col:'#3568b4'},{r:S.r1,col:'#ff5454'}]
+  .forEach(ring=>{
+    ctx.beginPath(); ctx.arc(S.hx,S.hy,ring.r,0,Math.PI*2);
+    ctx.fillStyle=ring.col; ctx.fill();
+    ctx.strokeStyle='#000'; ctx.lineWidth=2; ctx.stroke();
+  });
+  ctx.beginPath(); ctx.arc(S.hx,S.hy,S.sr*0.35,0,Math.PI*2);
+  ctx.fillStyle='#fff'; ctx.fill(); ctx.strokeStyle='#000'; ctx.lineWidth=1; ctx.stroke();
+  ctx.strokeStyle='rgba(0,0,0,0.18)'; ctx.lineWidth=1;
+  ctx.beginPath(); ctx.moveTo(S.iceL,S.hy); ctx.lineTo(S.iceR,S.hy); ctx.stroke();
+}
+
+// ── HOG LINE ──────────────────────────────────────────────
+function drawHogLine(){
+  ctx.strokeStyle='#ff5454'; ctx.lineWidth=2;
+  ctx.beginPath(); ctx.moveTo(S.iceL,S.hogY); ctx.lineTo(S.iceR,S.hogY); ctx.stroke();
+  ctx.fillStyle='#ff5454';
+  ctx.font=`10px 'Press Start 2P'`;
+  ctx.textAlign='right';
+  ctx.fillText('HOG',S.iceR-4,S.hogY-4);
+}
+
+// ── HACKS ─────────────────────────────────────────────────
+function drawHacks(){
+  const hw=22, hh=20;
+  [[S.hackLx,'L',hack==='left'],[S.hackRx,'R',hack==='right']].forEach(([hx,label,sel])=>{
+    const isHackPhase=phase==='hack';
+    ctx.fillStyle=sel?'#ffff54':isHackPhase?'#cccccc':'#999999';
+    ctx.fillRect(hx-hw,S.hackY-hh*0.5,hw*2,hh);
+    ctx.strokeStyle='#000'; ctx.lineWidth=1.5;
+    ctx.strokeRect(hx-hw,S.hackY-hh*0.5,hw*2,hh);
+    ctx.fillStyle=sel?'#000':'#222';
+    ctx.font=`12px 'Press Start 2P'`;
+    ctx.textAlign='center';
+    ctx.fillText(label,hx,S.hackY+5);
+    if(sel){
+      ctx.strokeStyle='#ffff54'; ctx.lineWidth=2.5;
+      ctx.strokeRect(hx-hw-3,S.hackY-hh*0.5-3,hw*2+6,hh+6);
+    }
+    if(isHackPhase&&!sel){
+      ctx.strokeStyle='#54ffff'; ctx.lineWidth=2;
+      ctx.strokeRect(hx-hw-3,S.hackY-hh*0.5-3,hw*2+6,hh+6);
+    }
+  });
+}
+
+// ── STONES ────────────────────────────────────────────────
+function drawStones(){
+  stones.forEach(s=>drawSingleStone(s));
+}
+
+function drawSingleStone(s){
+  const r=S.sr;
+  ctx.save();
+  ctx.translate(s.x,s.y);
+  ctx.rotate(s.angle||0);
+
+  // Shadow
+  ctx.beginPath(); ctx.arc(2,2,r,0,Math.PI*2);
+  ctx.fillStyle='rgba(0,0,0,0.22)'; ctx.fill();
+
+  // Body
+  ctx.beginPath(); ctx.arc(0,0,r,0,Math.PI*2);
+  ctx.fillStyle=s.col.body; ctx.fill();
+  ctx.strokeStyle=s.col.ring; ctx.lineWidth=1.5; ctx.stroke();
+
+  // Inner ring
+  ctx.beginPath(); ctx.arc(0,0,r*0.62,0,Math.PI*2);
+  ctx.strokeStyle=s.col.ring; ctx.lineWidth=1.2; ctx.stroke();
+
+  // HANDLE — T-bar shape on top, rotates with stone
+  const hw=r*0.55, ht=r*0.28;
+  ctx.fillStyle=s.col.handle;
+  // Stem
+  ctx.fillRect(-r*0.08,-r*0.62,r*0.16,r*0.38);
+  // Cross bar
+  ctx.fillRect(-hw,-r*0.62-ht,hw*2,ht);
+  ctx.strokeStyle='rgba(0,0,0,0.4)'; ctx.lineWidth=0.8;
+  ctx.strokeRect(-hw,-r*0.62-ht,hw*2,ht);
+
+  // Shine dot
+  ctx.beginPath(); ctx.arc(-r*0.26,-r*0.26,r*0.15,0,Math.PI*2);
+  ctx.fillStyle=s.col.shine; ctx.fill();
+
+  ctx.restore();
+}
+
+
+// ── SWEEP BUTTONS ─────────────────────────────────────────
+function drawSweepButtons(){
+  const W=canvas.width, H=canvas.height;
+  const btnW=S.iceW*0.28, btnH=44;
+  const y=H*0.90;
+  const cx=S.hx;
+  const gap=6;
+  const now=Date.now();
+  const isSwept = now < sweepActiveUntil;
+  // Remaining fraction of sweep window for visual pulse
+  const sweepFrac = isSwept ? (sweepActiveUntil-now)/SWEEP_DURATION : 0;
+
+  const btns=[
+    { x:cx-btnW-gap-btnW/2, color:'#54ffff', action:'left',  type:'diag-left'  },
+    { x:cx,                  color:'#54ff54', action:'fwd',   type:'straight'   },
+    { x:cx+btnW+gap+btnW/2,  color:'#54ffff', action:'right', type:'diag-right' },
+  ];
+
+  // Backdrop
+  ctx.fillStyle='rgba(20,10,50,0.80)';
+  ctx.fillRect(S.iceL+4, y-btnH/2-20, S.iceW-8, btnH+28);
+
+  // SWEEP label + active indicator
+  ctx.fillStyle='#b8a8ff';
+  ctx.font=`10px 'Press Start 2P'`;
+  ctx.textAlign='center';
+  ctx.fillText('SWEEP', cx, y-btnH/2-6);
+
+  // Friction active bar — shows remaining sweep window
+  if(isSwept){
+    const barW=(S.iceW-20)*sweepFrac;
+    ctx.fillStyle='rgba(84,255,255,0.25)';
+    ctx.fillRect(S.iceL+10, y-btnH/2-18, S.iceW-20, 8);
+    ctx.fillStyle='#54ffff';
+    ctx.fillRect(S.iceL+10, y-btnH/2-18, barW, 8);
+  }
+
+  btns.forEach(btn=>{
+    const lit = isSwept;
+    // Shadow
+    ctx.fillStyle='rgba(0,0,0,0.5)';
+    ctx.fillRect(btn.x-btnW/2+2, y-btnH/2+2, btnW, btnH);
+    // Body
+    ctx.fillStyle= lit ? 'rgba(30,60,60,0.95)' : 'rgba(20,10,50,0.92)';
+    ctx.fillRect(btn.x-btnW/2, y-btnH/2, btnW, btnH);
+    // Border — brighter when swept
+    ctx.strokeStyle= lit ? btn.color : btn.color+'88';
+    ctx.lineWidth= lit ? 2.5 : 1.5;
+    ctx.strokeRect(btn.x-btnW/2, y-btnH/2, btnW, btnH);
+
+    // Draw arrow on canvas — no Unicode, pixel perfect
+    drawSweepArrow(ctx, btn.x, y, btnW*0.55, btnH*0.55, btn.type, lit ? btn.color : btn.color+'99');
+  });
+}
+
+// Draw a clean canvas arrow for sweep buttons
+function drawSweepArrow(ctx, cx, cy, w, h, type, color){
+  ctx.save();
+  ctx.strokeStyle=color; ctx.fillStyle=color;
+  ctx.lineWidth=3; ctx.lineCap='round'; ctx.lineJoin='round';
+
+  const hw=w/2, hh=h/2;
+  const hs=hw*0.45; // arrowhead size
+
+  if(type==='straight'){
+    // Straight up arrow
+    ctx.beginPath();
+    ctx.moveTo(cx, cy+hh);
+    ctx.lineTo(cx, cy-hh+hs);
+    ctx.stroke();
+    // Arrowhead
+    ctx.beginPath();
+    ctx.moveTo(cx, cy-hh);
+    ctx.lineTo(cx-hs, cy-hh+hs*1.4);
+    ctx.lineTo(cx+hs, cy-hh+hs*1.4);
+    ctx.closePath(); ctx.fill();
+
+  } else if(type==='diag-left'){
+    // Diagonal up-left arrow
+    const x1=cx+hw*0.5, y1=cy+hh*0.5;
+    const x2=cx-hw*0.5, y2=cy-hh*0.5;
+    ctx.beginPath(); ctx.moveTo(x1,y1); ctx.lineTo(x2+hs*0.5,y2+hs*0.5); ctx.stroke();
+    // Arrowhead at top-left
+    ctx.beginPath();
+    ctx.moveTo(x2,y2);
+    ctx.lineTo(x2+hs*1.5,y2);
+    ctx.lineTo(x2,y2+hs*1.5);
+    ctx.closePath(); ctx.fill();
+
+  } else if(type==='diag-right'){
+    // Diagonal up-right arrow
+    const x1=cx-hw*0.5, y1=cy+hh*0.5;
+    const x2=cx+hw*0.5, y2=cy-hh*0.5;
+    ctx.beginPath(); ctx.moveTo(x1,y1); ctx.lineTo(x2-hs*0.5,y2+hs*0.5); ctx.stroke();
+    // Arrowhead at top-right
+    ctx.beginPath();
+    ctx.moveTo(x2,y2);
+    ctx.lineTo(x2-hs*1.5,y2);
+    ctx.lineTo(x2,y2+hs*1.5);
+    ctx.closePath(); ctx.fill();
+  }
+  ctx.restore();
+}
+
+// Store sweep button rects for hit testing
+function getSweepRects(){
+  const H=canvas.height;
+  const btnW=S.iceW*0.28, btnH=44;
+  const y=H*0.90;
+  const cx=S.hx, gap=6;
+  return [
+    { x:cx-btnW-gap-btnW/2, y, w:btnW, h:btnH, action:'left'  },
+    { x:cx,                  y, w:btnW, h:btnH, action:'fwd'   },
+    { x:cx+btnW+gap+btnW/2,  y, w:btnW, h:btnH, action:'right' },
+  ];
+}
+
+// ── HANDLE PROMPT ─────────────────────────────────────────
+function drawHandlePrompt(){
+  const W=canvas.width, H=canvas.height;
+  const cx=W*0.5, cy=H*0.60;
+  const bw=S.iceW*0.43, bh=38;
+  const inX=S.iceL+10, outX=S.iceL+S.iceW*0.53;
+
+  // Box background
+  ctx.fillStyle='rgba(20,10,50,0.88)';
+  ctx.fillRect(S.iceL+4,cy-52,S.iceW-8,130);
+  ctx.strokeStyle='#54ffff'; ctx.lineWidth=2;
+  ctx.strokeRect(S.iceL+4,cy-52,S.iceW-8,130);
+
+  // Title — MIN 10px
+  ctx.fillStyle='#fff'; ctx.textAlign='center';
+  ctx.font=`10px 'Press Start 2P'`;
+  ctx.fillText('CHOOSE HANDLE',cx,cy-30);
+
+  // Button layout: taller buttons, content stacked vertically
+  // spinning stone icon centered, then name, then curl direction below
+  const btnH = 68;
+  const iconY  = cy - 8;   // spinning stone center
+  const nameY  = cy + 22;  // IN-TURN / OUT-TURN
+  const curlY  = cy + 36;  // CURL RIGHT / CURL LEFT
+
+  // IN-TURN button
+  const inSel=handle==='in';
+  ctx.fillStyle=inSel?'#224422':'#1a2a1a';
+  ctx.fillRect(inX, cy-24, bw, btnH);
+  ctx.strokeStyle='#54ff54'; ctx.lineWidth=2;
+  ctx.strokeRect(inX, cy-24, bw, btnH);
+
+  // Spinning stone icon — centered in button
+  drawHandleIcon(inX+bw*0.5, iconY, S.sr*1.2, true, inSel);
+
+  ctx.fillStyle=inSel?'#54ff54':'#54ff54';
+  ctx.font=`10px 'Press Start 2P'`; ctx.textAlign='center';
+  ctx.fillText('IN-TURN', inX+bw*0.5, nameY);
+  ctx.fillStyle=inSel?'#88ff88':'#336633';
+  ctx.font=`10px 'Press Start 2P'`;
+  ctx.fillText('CURL RIGHT', inX+bw*0.5, curlY);
+
+  // OUT-TURN button
+  const outSel=handle==='out';
+  ctx.fillStyle=outSel?'#442222':'#2a1a1a';
+  ctx.fillRect(outX, cy-24, bw, btnH);
+  ctx.strokeStyle='#ff5454'; ctx.lineWidth=2;
+  ctx.strokeRect(outX, cy-24, bw, btnH);
+
+  drawHandleIcon(outX+bw*0.5, iconY, S.sr*1.2, false, outSel);
+
+  ctx.fillStyle='#ff5454';
+  ctx.font=`10px 'Press Start 2P'`; ctx.textAlign='center';
+  ctx.fillText('OUT-TURN', outX+bw*0.5, nameY);
+  ctx.fillStyle=outSel?'#ff8888':'#663333';
+  ctx.font=`10px 'Press Start 2P'`;
+  ctx.fillText('CURL LEFT', outX+bw*0.5, curlY);
+
+  // Blink prompt
+  if(frameCount%28<18&&!handle){
+    ctx.fillStyle='#54ffff';
+    ctx.font=`10px 'Press Start 2P'`; ctx.textAlign='center';
+    ctx.fillText('TAP TO SELECT',cx,cy+58);
+  }
+}
+
+// ── SPINNING STONE ICON FOR HANDLE BUTTONS ────────────────
+function drawHandleIcon(x, y, r, clockwise, selected){
+  // Mini stone
+  ctx.beginPath(); ctx.arc(x,y,r,0,Math.PI*2);
+  ctx.fillStyle=clockwise?(selected?'#54ff54':'#2a5a2a'):(selected?'#ff5454':'#5a2a2a');
+  ctx.fill();
+  ctx.strokeStyle=clockwise?'#54ff54':'#ff5454'; ctx.lineWidth=1.5; ctx.stroke();
+
+  // Rotating handle indicator — animates with frameCount
+  const spinAngle = (frameCount * (clockwise?0.06:-0.06)) % (Math.PI*2);
+  const hw=r*0.5;
+  ctx.save(); ctx.translate(x,y); ctx.rotate(spinAngle);
+  ctx.fillStyle=clockwise?'#88ff88':'#ff8888';
+  ctx.fillRect(-r*0.07,-r*0.65,r*0.14,r*0.35);
+  ctx.fillRect(-hw,-r*0.65,hw*2,r*0.22);
+  ctx.restore();
+
+  // Curved arrow showing rotation direction
+  const arrowR = r*1.55;
+  const startAngle = clockwise ? -Math.PI*0.7 : -Math.PI*0.3;
+  const endAngle   = clockwise ? Math.PI*0.2  : -Math.PI*1.2;
+  ctx.beginPath();
+  ctx.arc(x,y,arrowR,startAngle,endAngle,!clockwise);
+  ctx.strokeStyle=clockwise?'#54ffff':'#ffff54';
+  ctx.lineWidth=2; ctx.stroke();
+
+  // Arrowhead
+  const headAngle = clockwise ? endAngle : startAngle;
+  const hx2=x+Math.cos(headAngle)*arrowR;
+  const hy2=y+Math.sin(headAngle)*arrowR;
+  const perpAngle=headAngle+(clockwise?-Math.PI*0.5:Math.PI*0.5);
+  ctx.beginPath();
+  ctx.moveTo(hx2,hy2);
+  ctx.lineTo(hx2+Math.cos(perpAngle+0.5)*5, hy2+Math.sin(perpAngle+0.5)*5);
+  ctx.lineTo(hx2+Math.cos(perpAngle-0.5)*5, hy2+Math.sin(perpAngle-0.5)*5);
+  ctx.fillStyle=clockwise?'#54ffff':'#ffff54';
+  ctx.fill();
+}
+
+// ── HACK PROMPT ───────────────────────────────────────────
+function drawHackPrompt(){
+  const W=canvas.width;
+  const bx=S.iceL+8, by=S.hackY-40, bw=S.iceW-16, bh=26;
+  ctx.fillStyle='rgba(20,10,50,0.82)';
+  ctx.fillRect(bx,by,bw,bh);
+  ctx.strokeStyle='#54ffff'; ctx.lineWidth=1.5;
+  ctx.strokeRect(bx,by,bw,bh);
+  ctx.fillStyle='#54ffff';
+  ctx.font=`10px 'Press Start 2P'`;
+  ctx.textAlign='center';
+  ctx.fillText('CHOOSE HACK: L OR R', W*0.5, by+17);
+}
+
+// ── AIM GUIDE ─────────────────────────────────────────────
+// FIX: drag is relative to anchor point, not requiring pull below hack
+function drawAimGuide(){
+  // Always show stone at hack
+  drawSingleStone({x:hackX,y:hackY,angle:0,vx:0,vy:0,spin:0,col:COL_YOU});
+
+  if(!dragStart||!dragCurrent){
+    ctx.fillStyle='rgba(60,40,120,0.82)';
+    const dtw=S.iceW*0.7, dth=18;
+    ctx.fillRect(S.hx-dtw/2, hackY-S.sr-26, dtw, dth);
+    ctx.fillStyle='#b8a8ff';
+    ctx.font=`10px 'Press Start 2P'`; ctx.textAlign='center';
+    ctx.fillText('DRAG TO AIM',S.hx, hackY-S.sr-12);
+    return;
+  }
+
+  const dx=dragStart.x-dragCurrent.x;
+  const dy=dragStart.y-dragCurrent.y;
+  const d2=DIFF[currentDiff];
+  const power=Math.min(Math.hypot(dx,dy),d2.maxPow*2.5);
+  if(power<6) return;
+
+  const angle=Math.atan2(dy,dx);
+  const speed=power*0.07;
+  const d=DIFF[currentDiff];
+  const curlSign=handle==='in'?1:-1;
+
+  // Simulate path
+  let sx=hackX,sy=hackY,svx=Math.cos(angle)*speed,svy=Math.sin(angle)*speed;
+  let lastX=sx,lastY=sy;
+
+  for(let i=0;i<65;i++){
+    svx += curlSign*Math.abs(svy)*d.curlMag;
+    svx *= d.friction; svy *= d.friction;
+    sx+=svx; sy+=svy;
+
+    if(i%3===0){
+      const dotSize=Math.max(2,5.5-i*0.055);
+      const alpha=Math.max(0.08,1-i/65*1.1);
+      ctx.fillStyle = i<18  ? `rgba(84,255,255,${alpha})`
+                    : i<40  ? `rgba(50,160,255,${alpha})`
+                    :          `rgba(30,80,200,${alpha})`;
+      ctx.fillRect(Math.round(sx)-dotSize/2,Math.round(sy)-dotSize/2,dotSize,dotSize);
+    }
+    lastX=sx; lastY=sy;
+    if(Math.hypot(svx,svy)<0.2) break;
+    if(sy<S.iceT||sx<S.iceL-S.sr||sx>S.iceR+S.sr) break;
+  }
+
+  // Blinking X at destination
+  if(frameCount%20<13){
+    ctx.fillStyle='#54ffff';
+    ctx.font=`bold ${Math.floor(canvas.width*0.052)}px 'Press Start 2P'`;
+    ctx.textAlign='center';
+    ctx.fillText('X',lastX,lastY+5);
+  }
+
+  // Power bar
+  const maxP=d2.maxPow*2.5;
+  const barW=(power/maxP)*(S.iceW-16);
+  ctx.fillStyle='rgba(0,0,0,0.6)';
+  ctx.fillRect(S.iceL+7,hackY+S.sr+7,S.iceW-14,10);
+  ctx.fillStyle=power>maxP*0.76?'#ff5454':power>maxP*0.50?'#ffff54':'#54ff54';
+  ctx.fillRect(S.iceL+8,hackY+S.sr+8,barW,8);
+  ctx.fillStyle='#fff'; ctx.font=`10px 'Press Start 2P'`; ctx.textAlign='right';
+  ctx.fillText(Math.round(power/maxP*100)+'%',S.iceR-4,hackY+S.sr+17);
+}
+
+// ── SCORING HIGHLIGHT ─────────────────────────────────────
+function drawScoringHighlight(){
+  const scoring=calcScore(stones);
+  scoring.yourScoring.forEach(s=>{
+    ctx.beginPath(); ctx.arc(s.x,s.y,S.sr+5,0,Math.PI*2);
+    ctx.strokeStyle=frameCount%20<10?'#54ff54':'#ffff54';
+    ctx.lineWidth=3; ctx.stroke();
+  });
+}
+
+// ── PHASE BAR UPDATE ──────────────────────────────────────
+function updatePhaseBar(){
+// phase bar removed
+}
+
+// ── INPUT ─────────────────────────────────────────────────
+function getCanvasPos(e){
+  const rect=canvas.getBoundingClientRect();
+  const sx=canvas.width/rect.width, sy=canvas.height/rect.height;
+  const src=e.touches?e.touches[0]:e;
+  return {x:(src.clientX-rect.left)*sx, y:(src.clientY-rect.top)*sy};
+}
+
+canvas.addEventListener('mousedown',  onTapDown);
+canvas.addEventListener('touchstart', onTapDown,{passive:false});
+canvas.addEventListener('mousemove',  onTapMove);
+canvas.addEventListener('touchmove',  onTapMove,{passive:false});
+canvas.addEventListener('mouseup',    onTapUp);
+canvas.addEventListener('touchend',   onTapUp);
+
+function onTapDown(e){
+  e.preventDefault();
+  const p=getCanvasPos(e);
+
+  if(phase==='handle'){
+    const cy=canvas.height*0.60;
+    const bw=S.iceW*0.43, btnH=68;
+    const inX=S.iceL+10, outX=S.iceL+S.iceW*0.53;
+    if(p.x>=inX&&p.x<=inX+bw&&p.y>=cy-24&&p.y<=cy-24+btnH){
+      handle='in';
+      setTimeout(()=>{ phase='hack'; updatePhaseBar(); },300);
+    } else if(p.x>=outX&&p.x<=outX+bw&&p.y>=cy-24&&p.y<=cy-24+btnH){
+      handle='out';
+      setTimeout(()=>{ phase='hack'; updatePhaseBar(); },300);
+    }
+    return;
+  }
+
+  if(phase==='hack'){
+    if(Math.hypot(p.x-S.hackLx,p.y-S.hackY)<22){ hack='left';  hackX=S.hackLx; hackY=S.hackY; setTimeout(()=>{ phase='throw'; updatePhaseBar(); },250); }
+    if(Math.hypot(p.x-S.hackRx,p.y-S.hackY)<22){ hack='right'; hackX=S.hackRx; hackY=S.hackY; setTimeout(()=>{ phase='throw'; updatePhaseBar(); },250); }
+    return;
+  }
+
+  if(phase==='throw'){
+    // FIX: anchor drag at tap point, not at hack — full screen available
+    dragStart={...p};
+    dragCurrent={...p};
+    dragAnchorX=p.x;
+    dragAnchorY=p.y;
+  }
+
+  if(phase==='throwing'&&playerStone){
+    // Check sweep button taps — set friction window, no stackup
+    const rects=getSweepRects();
+    rects.forEach(r=>{
+      if(p.x>=r.x-r.w/2&&p.x<=r.x+r.w/2&&p.y>=r.y-r.h/2&&p.y<=r.y+r.h/2){
+        // Always reset to now+250ms — super clicking gets same effect as measured
+        sweepActiveUntil = Date.now() + SWEEP_DURATION;
+        if(r.action==='left')  sweepLeft=true;
+        if(r.action==='right') sweepRight=true;
+        if(r.action==='fwd')   {} // forward = friction only, no nudge
+      }
+    });
+  }
+}
+
+function onTapMove(e){
+  e.preventDefault();
+  if(phase!=='throw'||!dragStart) return;
+  dragCurrent=getCanvasPos(e);
+}
+
+function onTapUp(e){
+  e.preventDefault();
+  if(phase!=='throw'||!dragStart||!dragCurrent) return;
+  const dx=dragStart.x-dragCurrent.x, dy=dragStart.y-dragCurrent.y;
+  const d3=DIFF[currentDiff];
+  const maxPow3=d3.maxPow*2.5;
+  const power=Math.min(Math.hypot(dx,dy),maxPow3);
+  if(power<8){ dragStart=null; dragCurrent=null; return; }
+
+  const angle=Math.atan2(dy,dx);
+  const speed=power*0.07;
+
+  playerStone={
+    x:hackX, y:hackY,
+    vx:Math.cos(angle)*speed,
+    vy:Math.sin(angle)*speed,
+    angle:0, spin:0, col:COL_YOU, moving:true,
+  };
+
+  dragStart=null; dragCurrent=null;
+  phase='throwing';
+  updatePhaseBar();
+}
+
+// ── RESULT SCREEN ─────────────────────────────────────────
+function showResult(scoring){
+  cancelAnimationFrame(animId);
+  const ov=document.getElementById('overlay');
+  ov.innerHTML=''; ov.style.display='flex';
+  const won=scoring.youCount>0;
+
+  const res=document.createElement('div'); res.id='ov-result';
+  res.style.color=won?'#54ff54':'#ff5454';
+  res.style.textShadow='3px 3px 0 #4a3fa0';
+  res.textContent=won?'YOU SCORE!':'NO SCORE!';
+
+  const bd=document.createElement('div'); bd.id='ov-breakdown';
+  const hs=handle==='in'?'IN-TURN':'OUT-TURN';
+  const hk=hack==='left'?'LEFT HACK':'RIGHT HACK';
+  if(won){
+    const avgPct=scoring.yourScoring.length?Math.round(scoring.totalDist/scoring.yourScoring.length/S.r4*100):0;
+    bd.innerHTML=`${hs} · ${hk}<br>STONES SCORING: ${scoring.youCount}<br>AVG FROM CENTER: ${avgPct}%`;
+  } else {
+    bd.innerHTML=`${hs} · ${hk}<br>OPPONENT STONE CLOSEST<br>TRY A DIFFERENT LINE`;
+  }
+
+  const sc=document.createElement('div'); sc.id='ov-score-big';
+  sc.textContent=`SCORE: ${gameScore}`;
+
+  const tryBtn=document.createElement('button'); tryBtn.className='big-btn';
+  tryBtn.textContent='TRY AGAIN'; tryBtn.onclick=()=>initGame();
+
+  const diffBtn=document.createElement('button'); diffBtn.className='small-btn';
+  diffBtn.textContent='DIFFICULTY'; diffBtn.onclick=()=>showStart();
+
+  const homeBtn=document.createElement('button'); homeBtn.className='small-btn';
+  homeBtn.style.cssText='color:#ffff54;border-color:#ffff54';
+  homeBtn.textContent='◀ HOME'; homeBtn.onclick=()=>window.location.href='index.html';
+
+  [res,bd,sc,tryBtn,diffBtn,homeBtn].forEach(el=>ov.appendChild(el));
+}
+
+// ── START SCREEN ──────────────────────────────────────────
+function showStart(){
+  cancelAnimationFrame(animId);
+  const ov=document.getElementById('overlay');
+  ov.innerHTML=''; ov.style.display='flex';
+
+  const title=document.createElement('div'); title.id='ov-title'; title.innerHTML='STONE<br>COLD';
+  const sub=document.createElement('div'); sub.id='ov-sub'; sub.textContent='32953.COM · GAME 02';
+
+  const rules=document.createElement('div'); rules.className='ov-rule';
+  rules.innerHTML=`<span>1</span> HANDLE &nbsp;<span>2</span> HACK &nbsp;<span>3</span> THROW<br>OUTSCORE THE <span>RED STONES</span><br>ALL 3 STEPS BEFORE YOU THROW`;
+
+  const descEl=document.createElement('div'); descEl.id='ov-desc';
+  descEl.textContent='OLYMPIC ICE · FAST & HEAVY CURL';
+  const diffBtns=document.createElement('div');
+
+  const startBtn=document.createElement('button'); startBtn.className='big-btn';
+  startBtn.textContent='PLAY!'; startBtn.onclick=()=>initGame();
+
+  const homeBtn=document.createElement('button'); homeBtn.className='small-btn';
+  homeBtn.style.cssText='color:#ffff54;border-color:#ffff54';
+  homeBtn.textContent='◀ HOME'; homeBtn.onclick=()=>window.location.href='index.html';
+
+  [title,sub,rules,descEl,startBtn,homeBtn].forEach(el=>ov.appendChild(el));
+  resize(); buildSheet(); stones=generateStones(); generateSpectators(); draw();
+}
+
+// ── INIT ──────────────────────────────────────────────────
+function initGame(){
+  resize(); buildSheet();
+  stones=generateStones(); generateSpectators();
+  playerStone=null; phase='handle';
+  handle=null; hack=null;
+  dragStart=null; dragCurrent=null;
+  gameScore=0; frameCount=0;
+  sweepLeft=false; sweepFwd=false; sweepRight=false;
+  sweepActiveUntil=0;
+  document.getElementById('overlay').style.display='none';
+  document.getElementById('pv-score').textContent='SCORE: 0';
+  updatePhaseBar();
+  cancelAnimationFrame(animId);
+  gameLoop();
+}
+
+// ── BOOT ──────────────────────────────────────────────────
+resize(); buildSheet(); showStart();
+</script>
+</body>
+</html>
