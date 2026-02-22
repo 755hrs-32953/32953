@@ -260,7 +260,7 @@ document.getElementById('day-label').textContent =
 // Games data
 const GAMES = [
   {name:'LUNAR\nLANDER',  loc:'CAPE CANAVERAL', url:'lunar-lander.html', active:true,  score:0, iconFn:'iconLunarLander'},
-  {name:'STREET\nRACER',  loc:'PARIS',           url:'#',                 active:false, score:0, iconFn:'iconCar'},
+  {name:'STONE\nCOLD',    loc:'CALGARY, CANADA', url:'stone-cold.html',   active:true,  score:0, iconFn:'iconCurling'},
   {name:'SUB\nHUNTER',    loc:'N. ATLANTIC',     url:'#',                 active:false, score:0, iconFn:'iconSub'},
   {name:'SKI\nJUMP',      loc:'SWISS ALPS',      url:'#',                 active:false, score:0, iconFn:'iconSki'},
   {name:'TANK\nBATTLE',   loc:'UKRAINE',         url:'#',                 active:false, score:0, iconFn:'iconTank'},
@@ -538,8 +538,55 @@ function iconDiver(ctx, s) {
   px(ctx,'rgba(180,220,255,0.8)', 8*u,0,u,u);
 }
 
+
+function iconCurling(ctx, s) {
+  const u = s/16;
+  // Ice sheet
+  px(ctx,"#c8e8ff", 0,0,16*u,16*u);
+  // Delivery line (faint)
+  px(ctx,"rgba(150,200,255,0.6)", 7*u,0,u,16*u);
+  // === HOUSE (target rings) top-down ===
+  // Outer red ring
+  px(ctx,"#ff5454", 4*u,2*u,8*u,u);
+  px(ctx,"#ff5454", 4*u,11*u,8*u,u);
+  px(ctx,"#ff5454", 3*u,3*u,u,8*u);
+  px(ctx,"#ff5454", 12*u,3*u,u,8*u);
+  // White fill
+  px(ctx,"#e8f8ff", 4*u,3*u,8*u,9*u);
+  // Blue ring
+  px(ctx,"#5454ff", 5*u,4*u,6*u,u);
+  px(ctx,"#5454ff", 5*u,9*u,6*u,u);
+  px(ctx,"#5454ff", 4*u,4*u,u,6*u);
+  px(ctx,"#5454ff", 11*u,4*u,u,6*u);
+  // Inner white
+  px(ctx,"#e8f8ff", 5*u,5*u,6*u,5*u);
+  // Button - red
+  px(ctx,"#ff5454", 7*u,6*u,2*u,u);
+  px(ctx,"#ff5454", 6*u,7*u,4*u,u);
+  px(ctx,"#ff5454", 7*u,8*u,2*u,u);
+  // Tee line
+  px(ctx,"rgba(100,150,200,0.5)", 3*u,7*u,10*u,u);
+  // === STONE (mid-delivery, towards house) ===
+  px(ctx,"#884444", 6*u,12*u,4*u,u);
+  px(ctx,"#aa5555", 5*u,13*u,6*u,u);
+  px(ctx,"#884444", 6*u,14*u,4*u,u);
+  px(ctx,"#ffff54", 7*u,12*u,2*u,u); // handle
+  px(ctx,"#cc7777", 6*u,13*u,u,u);   // highlight
+  // Motion lines
+  px(ctx,"rgba(100,150,200,0.5)", 7*u,11*u,2*u,u);
+  px(ctx,"rgba(100,150,200,0.4)", 6*u,10*u,4*u,u);
+  // === SWEEPER ===
+  px(ctx,"#ffcf87", 13*u,9*u,u,u);   // head
+  px(ctx,"#ff5454", 13*u,10*u,u,3*u); // body
+  px(ctx,"#ffcf87", 12*u,11*u,u,u);  // arm L
+  px(ctx,"#ffcf87", 14*u,11*u,u,u);  // arm R
+  px(ctx,"#8a6a3a", 11*u,11*u,u,u);  // broom shaft
+  px(ctx,"#8a6a3a", 10*u,12*u,u,u);
+  px(ctx,"#c8a870", 9*u,13*u,3*u,u); // broom head
+}
+
 const ICON_FNS = {
-  iconLunarLander, iconCar, iconSub, iconSki, iconTank,
+  iconLunarLander, iconCurling, iconCar, iconSub, iconSki, iconTank,
   iconAsteroid, iconJungle, iconPlane, iconGold, iconDiver
 };
 
