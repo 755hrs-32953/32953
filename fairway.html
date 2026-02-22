@@ -207,6 +207,7 @@ const ZOOM_SPEED  = 0.07;  // lerp factor per frame (smooth ease-out)
 
 // Drag state
 let dragStart = null, dragCurrent = null;
+let aimOutFrac = 0;  // current output power fraction, read by drawHUD for bar
 
 // Hole data (generated per hole)
 let hole = {};
@@ -836,15 +837,8 @@ function drawAimGuide() {
     ctx.fillText('X', lastX, lastY + 5);
   }
 
-  // Power bar — shows OUTPUT power % (after curve), not raw drag %
-  const barW = outFrac * (canvas.width * 0.7);
-  const barX = canvas.width * 0.15;
-  const barY = ball.y + 20;
-  ctx.fillStyle = 'rgba(0,0,0,0.6)'; ctx.fillRect(barX, barY, canvas.width * 0.7, 10);
-  ctx.fillStyle = outFrac > 0.8 ? '#ff5454' : outFrac > 0.5 ? '#ffff54' : '#54ff54';
-  ctx.fillRect(barX, barY, barW, 10);
-  ctx.fillStyle = '#fff'; ctx.font = `10px 'Press Start 2P'`; ctx.textAlign = 'right';
-  ctx.fillText(Math.round(outFrac*100)+'%', barX + canvas.width*0.7 - 2, barY + 9);
+  // Store power fraction for drawHUD to render in screen space (outside zoom)
+  aimOutFrac = outFrac;
 }
 
 // ── FLIGHT ANIMATION ─────────────────────────────────────────
@@ -896,15 +890,31 @@ function drawHUD() {
   ctx.fillStyle = '#54ff54'; ctx.fill();
   ctx.restore();
 
-  // Club indicator (when aiming)
+  // Club name + power bar — fixed screen position, unaffected by zoom
   if (phase === 'aim' || phase === 'putting') {
     const cl = CLUBS[selectedClub];
+    // Club name strip at bottom
     ctx.fillStyle = 'rgba(10,5,40,0.85)';
-    ctx.fillRect(0, H - 32, W, 32); // bottom info
-    // Already handled by botbar... just show club name on canvas
+    ctx.fillRect(0, H - 32, W, 32);
     ctx.fillStyle = cl.color; ctx.font = `10px 'Press Start 2P'`; ctx.textAlign = 'center';
-    const H2 = canvas.height;
-    ctx.fillText(cl.name, W*0.5, H2 - 10);
+    ctx.fillText(cl.name, W * 0.5, H - 10);
+
+    // Power bar — always fixed at bottom of screen in screen space
+    if (dragStart && dragCurrent && aimOutFrac > 0) {
+      const barX = W * 0.15;
+      const barY = H - 52;
+      const barTotalW = W * 0.7;
+      ctx.fillStyle = 'rgba(0,0,0,0.7)';
+      ctx.fillRect(barX, barY, barTotalW, 12);
+      ctx.fillStyle = aimOutFrac > 0.8 ? '#ff5454' : aimOutFrac > 0.5 ? '#ffff54' : '#54ff54';
+      ctx.fillRect(barX, barY, aimOutFrac * barTotalW, 12);
+      // Border
+      ctx.strokeStyle = 'rgba(255,255,255,0.3)'; ctx.lineWidth = 1;
+      ctx.strokeRect(barX, barY, barTotalW, 12);
+      // Percentage label
+      ctx.fillStyle = '#fff'; ctx.font = `10px 'Press Start 2P'`; ctx.textAlign = 'right';
+      ctx.fillText(Math.round(aimOutFrac * 100) + '%', barX + barTotalW - 2, barY + 10);
+    }
   }
 }
 
@@ -995,6 +1005,7 @@ function onUp(e) {
   ball.flying = true;
   ballTrail = [];
   strokeCount++;
+  aimOutFrac = 0;
   dragStart = null; dragCurrent = null;
   phase = 'shot';
 }
