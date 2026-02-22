@@ -1,1 +1,633 @@
-<h1>32953 Test</h1>
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
+<title>32953.COM</title>
+<style>
+  @import url('https://fonts.googleapis.com/css2?family=Press+Start+2P&display=swap');
+
+  :root {
+    --c64-blue:    #3568b4;
+    --c64-purple:  #7b68ee;
+    --c64-dark:    #4a3fa0;
+    --c64-yellow:  #ffff54;
+    --c64-white:   #ffffff;
+    --c64-green:   #54ff54;
+    --c64-red:     #ff5454;
+    --c64-cyan:    #54ffff;
+    --c64-grey:    #2a3a6a;
+  }
+
+  * { margin:0; padding:0; box-sizing:border-box; image-rendering:pixelated; }
+
+  html, body {
+    width:100%; height:100%;
+    background:#000;
+    display:flex; align-items:center; justify-content:center;
+    overflow:hidden;
+    font-family:'Press Start 2P', monospace;
+  }
+
+  #app {
+    width:420px;
+    height:100vh;
+    max-height:900px;
+    min-height:560px;
+    background:var(--c64-blue);
+    display:flex;
+    flex-direction:column;
+    border-left:4px solid var(--c64-dark);
+    border-right:4px solid var(--c64-dark);
+    position:relative;
+    overflow:hidden;
+  }
+
+  /* TITLE BAR */
+  #titlebar {
+    background:var(--c64-purple);
+    border-bottom:4px solid var(--c64-dark);
+    padding:10px 8px 8px;
+    text-align:center;
+    flex-shrink:0;
+  }
+
+  #title {
+    font-size:clamp(14px,4vw,22px);
+    color:var(--c64-white);
+    letter-spacing:4px;
+    text-shadow:3px 3px 0 var(--c64-dark);
+    display:block;
+  }
+
+  #subtitle {
+    font-size:clamp(5px,1.5vw,7px);
+    color:#b8a8ff;
+    letter-spacing:2px;
+    margin-top:5px;
+    display:block;
+  }
+
+  /* DATE / DAY BANNER */
+  #daybanner {
+    background:var(--c64-dark);
+    padding:4px 10px;
+    display:flex;
+    justify-content:space-between;
+    align-items:center;
+    flex-shrink:0;
+    font-size:clamp(4px,1.2vw,6px);
+    color:#b8a8ff;
+    letter-spacing:1px;
+  }
+
+  /* GAME GRID */
+  #grid {
+    flex:1;
+    display:grid;
+    grid-template-columns:1fr 1fr;
+    grid-template-rows:repeat(5,1fr);
+    min-height:0;
+    gap:0;
+  }
+
+  /* Each game slot */
+  .slot {
+    display:flex;
+    align-items:center;
+    padding:6px 8px;
+    border:1px solid rgba(255,255,255,0.08);
+    position:relative;
+    cursor:default;
+    transition:background 0.05s;
+    min-height:0;
+    overflow:hidden;
+  }
+
+  .slot.active { cursor:pointer; }
+  .slot.active:hover { background:rgba(255,255,255,0.07); }
+  .slot.active:active { background:rgba(255,255,255,0.14); }
+
+  /* Left slots: icon on left, info on right */
+  .slot.left {
+    flex-direction:row;
+    justify-content:flex-start;
+    border-right:2px solid rgba(255,255,255,0.12);
+  }
+
+  /* Right slots: icon on right, info on left */
+  .slot.right {
+    flex-direction:row-reverse;
+    justify-content:flex-start;
+    border-left:none;
+  }
+
+  .icon-wrap {
+    flex-shrink:0;
+    display:flex;
+    align-items:center;
+    justify-content:center;
+  }
+
+  .info {
+    flex:1;
+    display:flex;
+    flex-direction:column;
+    justify-content:center;
+    overflow:hidden;
+    padding:0 6px;
+  }
+
+  .slot.left .info { text-align:left; padding-left:8px; padding-right:2px; }
+  .slot.right .info { text-align:right; padding-right:8px; padding-left:2px; }
+
+  .game-name {
+    font-size:clamp(5px,1.3vw,8px);
+    color:var(--c64-yellow);
+    letter-spacing:1px;
+    line-height:1.5;
+    text-shadow:1px 1px 0 #000;
+    white-space:nowrap;
+    overflow:hidden;
+    text-overflow:ellipsis;
+  }
+
+  .slot.active .game-name { color:var(--c64-yellow); }
+
+  .game-score {
+    font-size:clamp(4px,1.1vw,7px);
+    color:var(--c64-green);
+    letter-spacing:1px;
+    margin-top:3px;
+    text-shadow:1px 1px 0 #000;
+  }
+
+  .game-score.coming-soon {
+    color:#888;
+    font-size:clamp(3px,0.9vw,6px);
+    animation:blink 1.2s step-end infinite;
+  }
+
+  /* DIVIDER between rows */
+  .slot::after {
+    content:'';
+    position:absolute;
+    bottom:0; left:5%; right:5%;
+    height:1px;
+    background:rgba(255,255,255,0.06);
+  }
+
+  /* TOTAL SCORE BAR */
+  #scorebar {
+    background:var(--c64-purple);
+    border-top:4px solid var(--c64-dark);
+    padding:8px 16px;
+    display:flex;
+    justify-content:space-between;
+    align-items:center;
+    flex-shrink:0;
+  }
+
+  #score-label {
+    font-size:clamp(5px,1.3vw,8px);
+    color:var(--c64-white);
+    letter-spacing:2px;
+  }
+
+  #total-score {
+    font-size:clamp(7px,1.8vw,12px);
+    color:var(--c64-yellow);
+    letter-spacing:2px;
+    text-shadow:2px 2px 0 var(--c64-dark);
+  }
+
+  #ace-note {
+    font-size:clamp(3px,0.9vw,6px);
+    color:#b8a8ff;
+    letter-spacing:1px;
+  }
+
+  /* Scanlines */
+  #scanlines {
+    position:absolute; inset:0;
+    pointer-events:none;
+    background:repeating-linear-gradient(0deg,transparent,transparent 3px,rgba(0,0,0,0.1) 3px,rgba(0,0,0,0.1) 4px);
+    z-index:50;
+  }
+
+  @keyframes blink { 0%,49%{opacity:1} 50%,100%{opacity:.3} }
+  @keyframes pulse { 0%,100%{opacity:1} 50%{opacity:.7} }
+</style>
+</head>
+<body>
+<div id="app">
+  <div id="scanlines"></div>
+
+  <div id="titlebar">
+    <span id="title">32953.COM</span>
+    <span id="subtitle">DAILY ARCADE — 10 MISSIONS</span>
+  </div>
+
+  <div id="daybanner">
+    <span id="day-label"></span>
+    <span id="day-clock"></span>
+  </div>
+
+  <div id="grid">
+    <!-- Slots filled by JS -->
+  </div>
+
+  <div id="scorebar">
+    <div id="score-label">TODAY'S TOTAL</div>
+    <div id="total-score">000000</div>
+    <div id="ace-note">ACE SCORES ONLY</div>
+  </div>
+</div>
+
+<script>
+// Clock & date
+function tick() {
+  const n = new Date();
+  const pad = v => String(v).padStart(2,'0');
+  document.getElementById('day-clock').textContent =
+    pad(n.getUTCHours())+':'+pad(n.getUTCMinutes())+':'+pad(n.getUTCSeconds())+' UTC';
+}
+setInterval(tick,1000); tick();
+const nd = new Date();
+document.getElementById('day-label').textContent =
+  nd.toLocaleDateString('en-US',{weekday:'short',month:'short',day:'numeric'}).toUpperCase();
+
+// Games data
+const GAMES = [
+  {name:'LUNAR\nLANDER',  loc:'CAPE CANAVERAL', url:'lunar-lander.html', active:true,  score:0, iconFn:'iconLunarLander'},
+  {name:'STREET\nRACER',  loc:'PARIS',           url:'#',                 active:false, score:0, iconFn:'iconCar'},
+  {name:'SUB\nHUNTER',    loc:'N. ATLANTIC',     url:'#',                 active:false, score:0, iconFn:'iconSub'},
+  {name:'SKI\nJUMP',      loc:'SWISS ALPS',      url:'#',                 active:false, score:0, iconFn:'iconSki'},
+  {name:'TANK\nBATTLE',   loc:'UKRAINE',         url:'#',                 active:false, score:0, iconFn:'iconTank'},
+  {name:'ASTEROID\nRUN',  loc:'DEEP SPACE',      url:'#',                 active:false, score:0, iconFn:'iconAsteroid'},
+  {name:'JUNGLE\nRUN',    loc:'AMAZON',          url:'#',                 active:false, score:0, iconFn:'iconJungle'},
+  {name:'DOGFIGHT',       loc:'ENGLISH CH.',     url:'#',                 active:false, score:0, iconFn:'iconPlane'},
+  {name:'GOLD\nRUSH',     loc:'YUKON',           url:'#',                 active:false, score:0, iconFn:'iconGold'},
+  {name:'DEEP\nDIVE',     loc:'MARIANA',         url:'#',                 active:false, score:0, iconFn:'iconDiver'},
+];
+
+// ─────────────────────────────────────────────
+// PIXEL ART ICON PAINTERS
+// Each draws on a small canvas at (0,0,size,size)
+// ─────────────────────────────────────────────
+
+function px(ctx, col, x, y, w, h) {
+  ctx.fillStyle = col;
+  ctx.fillRect(x, y, w || 1, h || 1);
+}
+
+function iconLunarLander(ctx, s) {
+  const u = s/16;
+  // Body
+  px(ctx,'#ffff54', 6*u,3*u,4*u,4*u);
+  px(ctx,'#ffff54', 5*u,4*u,6*u,3*u);
+  // Cockpit window
+  px(ctx,'#54ffff', 7*u,4*u,2*u,2*u);
+  // Legs
+  px(ctx,'#ffff54', 4*u,7*u,1*u,3*u);
+  px(ctx,'#ffff54', 3*u,9*u,2*u,1*u);
+  px(ctx,'#ffff54', 11*u,7*u,1*u,3*u);
+  px(ctx,'#ffff54', 11*u,9*u,2*u,1*u);
+  // Engine / nozzle
+  px(ctx,'#aaa',   6*u,7*u,4*u,1*u);
+  px(ctx,'#aaa',   7*u,8*u,2*u,1*u);
+  // Flame
+  px(ctx,'#ff8800',7*u,9*u,2*u,2*u);
+  px(ctx,'#ffff54',7*u,10*u,2*u,1*u);
+  px(ctx,'#ff4400',7*u,11*u,2*u,1*u);
+  // Stars
+  px(ctx,'#fff', 1*u,1*u,u,u);
+  px(ctx,'#fff', 13*u,2*u,u,u);
+  px(ctx,'#fff', 2*u,5*u,u,u);
+  px(ctx,'#fff', 14*u,6*u,u,u);
+}
+
+function iconCar(ctx, s) {
+  const u = s/16;
+  // Road
+  px(ctx,'#555', 0,11*u,16*u,2*u);
+  px(ctx,'#ffff54', 3*u,11.5*u,2*u,u);
+  px(ctx,'#ffff54', 7*u,11.5*u,2*u,u);
+  px(ctx,'#ffff54', 11*u,11.5*u,2*u,u);
+  // Car body
+  px(ctx,'#ff5454', 2*u,8*u,12*u,3*u);
+  px(ctx,'#ff5454', 4*u,6*u,8*u,3*u);
+  // Windows
+  px(ctx,'#54ffff', 5*u,6.5*u,2.5*u,2*u);
+  px(ctx,'#54ffff', 8.5*u,6.5*u,2.5*u,2*u);
+  // Wheels
+  px(ctx,'#222', 3*u,10*u,3*u,3*u);
+  px(ctx,'#222', 10*u,10*u,3*u,3*u);
+  px(ctx,'#888', 3.5*u,10.5*u,2*u,2*u);
+  px(ctx,'#888', 10.5*u,10.5*u,2*u,2*u);
+  // Headlight
+  px(ctx,'#ffff54', 13*u,9*u,u,u);
+  // Eiffel tower tiny
+  px(ctx,'#ffff54', 1*u,3*u,u,5*u);
+  px(ctx,'#ffff54', 1.5*u,4*u,u,u);
+  px(ctx,'#ffff54', 0.5*u,6*u,2*u,u);
+}
+
+function iconSub(ctx, s) {
+  const u = s/16;
+  // Water
+  px(ctx,'#2038a0', 0,10*u,16*u,6*u);
+  px(ctx,'#54b4ff', 0,9*u,16*u,u);
+  // Sub body
+  px(ctx,'#54ff54', 2*u,6*u,12*u,4*u);
+  // Rounded ends
+  px(ctx,'#54ff54', 1*u,7*u,u,2*u);
+  px(ctx,'#54ff54', 14*u,7*u,u,2*u);
+  // Conning tower
+  px(ctx,'#54ff54', 6*u,4*u,4*u,3*u);
+  // Periscope
+  px(ctx,'#54ff54', 8*u,2*u,u,3*u);
+  px(ctx,'#54ff54', 7*u,2*u,3*u,u);
+  // Window
+  px(ctx,'#54ffff', 5*u,7*u,2*u,2*u);
+  // Propeller
+  px(ctx,'#ffff54', 13*u,6*u,u,u);
+  px(ctx,'#ffff54', 14*u,7*u,u,2*u);
+  px(ctx,'#ffff54', 13*u,9*u,u,u);
+  // Bubbles
+  px(ctx,'#54ffff', 4*u,12*u,u,u);
+  px(ctx,'#54ffff', 7*u,11*u,u,u);
+  px(ctx,'#54ffff', 11*u,13*u,u,u);
+}
+
+function iconSki(ctx, s) {
+  const u = s/16;
+  // Sky
+  px(ctx,'#54ffff', 0,0,16*u,8*u);
+  // Mountain
+  px(ctx,'#fff', 0,8*u,16*u,8*u);
+  px(ctx,'#54b4ff', 1*u,10*u,2*u,6*u);
+  px(ctx,'#54b4ff', 4*u,11*u,2*u,5*u);
+  px(ctx,'#54b4ff', 8*u,9*u,3*u,7*u);
+  // Skier
+  px(ctx,'#ff5454', 11*u,5*u,2*u,2*u); // body
+  px(ctx,'#ffcf87', 11*u,4*u,2*u,u);   // head
+  px(ctx,'#ff5454', 10*u,6*u,4*u,u);   // arms
+  px(ctx,'#222',    10*u,7*u,5*u,u);   // skis
+  // Sun
+  px(ctx,'#ffff54', 2*u,u,2*u,2*u);
+  px(ctx,'#ffff54', u,2*u,u,u);
+  px(ctx,'#ffff54', 4*u,2*u,u,u);
+}
+
+function iconTank(ctx, s) {
+  const u = s/16;
+  // Ground
+  px(ctx,'#3a5a2a', 0,13*u,16*u,3*u);
+  // Tracks
+  px(ctx,'#222', 1*u,10*u,14*u,4*u);
+  px(ctx,'#444', 2*u,11*u,12*u,2*u);
+  for(let i=0;i<6;i++) px(ctx,'#666', (2+i*2)*u,10*u,u,4*u);
+  // Body
+  px(ctx,'#6a8a4a', 2*u,7*u,12*u,4*u);
+  // Turret
+  px(ctx,'#5a7a3a', 4*u,4*u,8*u,4*u);
+  // Barrel
+  px(ctx,'#4a6a2a', 10*u,5*u,5*u,2*u);
+  // Hatch
+  px(ctx,'#3a5a1a', 6*u,3*u,4*u,2*u);
+  // Star
+  px(ctx,'#ff5454', 7*u,4.5*u,2*u,u);
+  px(ctx,'#ff5454', 7.5*u,4*u,u,2*u);
+}
+
+function iconAsteroid(ctx, s) {
+  const u = s/16;
+  // Space background - stars
+  px(ctx,'#fff', u,u,u,u);
+  px(ctx,'#fff', 13*u,2*u,u,u);
+  px(ctx,'#fff', 4*u,4*u,u,u);
+  px(ctx,'#fff', 14*u,10*u,u,u);
+  px(ctx,'#fff', 2*u,12*u,u,u);
+  px(ctx,'#fff', 10*u,13*u,u,u);
+  // Asteroid (chunky rock)
+  px(ctx,'#a07840', 4*u,3*u,8*u,2*u);
+  px(ctx,'#a07840', 2*u,5*u,12*u,5*u);
+  px(ctx,'#a07840', 4*u,10*u,8*u,2*u);
+  px(ctx,'#7a5820', 3*u,4*u,2*u,u);
+  px(ctx,'#7a5820', 10*u,7*u,2*u,u);
+  px(ctx,'#7a5820', 5*u,9*u,2*u,u);
+  // Spaceship
+  px(ctx,'#54ffff', 12*u,u,2*u,4*u);
+  px(ctx,'#54ffff', 11*u,2*u,4*u,2*u);
+  px(ctx,'#ffff54', 13*u,5*u,u,u); // thrust
+  px(ctx,'#ff8800', 13*u,6*u,u,u);
+}
+
+function iconJungle(ctx, s) {
+  const u = s/16;
+  // Ground
+  px(ctx,'#2a6a1a', 0,12*u,16*u,4*u);
+  // Trees
+  px(ctx,'#1a8a1a', 0,6*u,4*u,6*u);
+  px(ctx,'#2aaa2a', u,4*u,3*u,4*u);
+  px(ctx,'#1a8a1a', 12*u,5*u,4*u,7*u);
+  px(ctx,'#2aaa2a', 13*u,3*u,3*u,4*u);
+  px(ctx,'#1a8a1a', 6*u,7*u,4*u,5*u);
+  // Trunk
+  px(ctx,'#7a4a1a', u,10*u,2*u,4*u);
+  px(ctx,'#7a4a1a', 13*u,10*u,2*u,4*u);
+  // Character (pitfall-style)
+  px(ctx,'#ff8800', 7*u,7*u,2*u,2*u); // head
+  px(ctx,'#ffcf87', 7*u,6*u,2*u,u);   // hat
+  px(ctx,'#ff8800', 6*u,9*u,4*u,3*u); // body
+  px(ctx,'#ffcf87', 6*u,10*u,u,2*u);  // arm
+  px(ctx,'#ffcf87', 9*u,10*u,u,2*u);  // arm
+  px(ctx,'#ff8800', 7*u,12*u,u,2*u);  // leg
+  px(ctx,'#ff8800', 8*u,12*u,u,2*u);  // leg
+  // Vine
+  px(ctx,'#2aaa2a', 5*u,2*u,u,6*u);
+}
+
+function iconPlane(ctx, s) {
+  const u = s/16;
+  // Sky / clouds
+  px(ctx,'#54b4ff', 0,0,16*u,16*u);
+  px(ctx,'#fff', u,2*u,3*u,2*u);
+  px(ctx,'#fff', 0,3*u,4*u,u);
+  px(ctx,'#fff', 11*u,10*u,4*u,2*u);
+  px(ctx,'#fff', 12*u,9*u,3*u,u);
+  // Plane body
+  px(ctx,'#ffff54', 3*u,6*u,10*u,3*u);
+  // Nose
+  px(ctx,'#ffff54', 12*u,7*u,3*u,u);
+  // Cockpit
+  px(ctx,'#54ffff', 9*u,5*u,3*u,2*u);
+  // Top wing
+  px(ctx,'#ff5454', 5*u,3*u,6*u,3*u);
+  px(ctx,'#dd3333', 5*u,4*u,6*u,u);
+  // Bottom wing
+  px(ctx,'#ff5454', 5*u,9*u,6*u,3*u);
+  px(ctx,'#dd3333', 5*u,10*u,6*u,u);
+  // Tail
+  px(ctx,'#ff5454', 2*u,4*u,3*u,3*u);
+  px(ctx,'#ff5454', 2*u,9*u,3*u,3*u);
+  // Bullets
+  px(ctx,'#ffff54', 13*u,6*u,2*u,u);
+  px(ctx,'#ffff54', 14*u,8*u,2*u,u);
+}
+
+function iconGold(ctx, s) {
+  const u = s/16;
+  // Sky
+  px(ctx,'#54b4ff', 0,0,16*u,8*u);
+  // Mountains
+  px(ctx,'#7a6a50', 0,8*u,5*u,8*u);
+  px(ctx,'#9a8a60', 3*u,6*u,5*u,10*u);
+  px(ctx,'#7a6a50', 10*u,7*u,6*u,9*u);
+  // Ground
+  px(ctx,'#8a7040', 0,12*u,16*u,4*u);
+  // Gold nuggets
+  px(ctx,'#ffff54', 6*u,11*u,2*u,2*u);
+  px(ctx,'#ffcc00', 6.5*u,11.5*u,u,u);
+  px(ctx,'#ffff54', 10*u,10*u,3*u,3*u);
+  px(ctx,'#ffcc00', 10.5*u,10.5*u,2*u,2*u);
+  // Miner character
+  px(ctx,'#ffcf87', 2*u,7*u,2*u,2*u); // head
+  px(ctx,'#fff',    2*u,6*u,3*u,u);   // hat
+  px(ctx,'#5454ff', 2*u,9*u,2*u,3*u); // body
+  px(ctx,'#ffcf87', u,10*u,u,2*u);    // arm
+  // Pickaxe
+  px(ctx,'#888',    u,9*u,2*u,u);
+  px(ctx,'#ffcf87', 0,8*u,u,2*u);
+}
+
+function iconDiver(ctx, s) {
+  const u = s/16;
+  // Deep water background
+  px(ctx,'#001060', 0,0,16*u,16*u);
+  px(ctx,'#001880', 0,0,16*u,8*u);
+  // Light rays
+  px(ctx,'rgba(100,150,255,0.3)', 7*u,0,2*u,16*u);
+  // Fish
+  px(ctx,'#ffaa00', 2*u,8*u,4*u,2*u);
+  px(ctx,'#ffaa00', u,9*u,u,u);
+  px(ctx,'#ffaa00', 5*u,8*u,2*u,u);
+  px(ctx,'#ffaa00', 5*u,9*u,2*u,u);
+  px(ctx,'#222',    3*u,8*u,u,u);
+  // Big fish
+  px(ctx,'#ff5454', 10*u,11*u,5*u,3*u);
+  px(ctx,'#ff5454', 9*u,12*u,u,u);
+  px(ctx,'#ff5454', 14*u,11*u,2*u,u);
+  px(ctx,'#ff5454', 14*u,13*u,2*u,u);
+  px(ctx,'#222',    11*u,12*u,u,u);
+  // Diver
+  px(ctx,'#ffcf87', 7*u,3*u,2*u,2*u);  // head
+  px(ctx,'#222',    7*u,2*u,2*u,u);    // mask
+  px(ctx,'#54ffff', 7*u,2*u,2*u,u);    // visor
+  px(ctx,'#3468aa', 6*u,5*u,4*u,4*u);  // suit
+  px(ctx,'#ffcf87', 5*u,6*u,u,2*u);    // arm
+  px(ctx,'#ffcf87', 10*u,6*u,u,2*u);   // arm
+  px(ctx,'#3468aa', 7*u,9*u,u,3*u);    // leg
+  px(ctx,'#3468aa', 8*u,9*u,u,3*u);    // leg
+  px(ctx,'#222',    6*u,11*u,2*u,u);   // fin
+  px(ctx,'#222',    8*u,11*u,2*u,u);   // fin
+  // Bubbles
+  px(ctx,'rgba(180,220,255,0.8)', 9*u,3*u,u,u);
+  px(ctx,'rgba(180,220,255,0.8)', 10*u,u,u,u);
+  px(ctx,'rgba(180,220,255,0.8)', 8*u,0,u,u);
+}
+
+const ICON_FNS = {
+  iconLunarLander, iconCar, iconSub, iconSki, iconTank,
+  iconAsteroid, iconJungle, iconPlane, iconGold, iconDiver
+};
+
+// Build icon canvas
+function makeIcon(fnName, size, active) {
+  const c = document.createElement('canvas');
+  c.width = size; c.height = size;
+  c.style.width = size+'px'; c.style.height = size+'px';
+  c.style.imageRendering = 'pixelated';
+  const ctx2 = c.getContext('2d');
+  if(!active) {
+    ctx2.globalAlpha = 0.28;
+    ctx2.filter = 'grayscale(80%)';
+  }
+  ICON_FNS[fnName](ctx2, size);
+  return c;
+}
+
+// Build the grid
+function buildGrid() {
+  const grid = document.getElementById('grid');
+  grid.innerHTML = '';
+
+  // Icon size - responsive
+  const appH = document.getElementById('app').offsetHeight;
+  const iconSize = Math.max(32, Math.min(52, Math.floor(appH * 0.09)));
+
+  // Left column: games 0,2,4,6,8  Right column: games 1,3,5,7,9
+  const left  = [0,2,4,6,8];
+  const right = [1,3,5,7,9];
+
+  // Interleave: row 0 = [left[0], right[0]], row 1 = [left[1], right[1]] etc
+  for(let row=0; row<5; row++) {
+    const li = left[row];
+    const ri = right[row];
+    [li, ri].forEach((idx, col) => {
+      const g = GAMES[idx];
+      const side = col === 0 ? 'left' : 'right';
+
+      const slot = document.createElement('div');
+      slot.className = 'slot ' + side + (g.active ? ' active' : '');
+
+      // Icon
+      const iconWrap = document.createElement('div');
+      iconWrap.className = 'icon-wrap';
+      const ic = makeIcon(g.iconFn, iconSize, g.active);
+      iconWrap.appendChild(ic);
+
+      // Info
+      const info = document.createElement('div');
+      info.className = 'info';
+
+      const nameEl = document.createElement('div');
+      nameEl.className = 'game-name';
+      nameEl.textContent = g.name.replace('\n',' ');
+
+      const scoreEl = document.createElement('div');
+      scoreEl.className = 'game-score' + (g.active ? '' : ' coming-soon');
+      scoreEl.id = 'score-' + idx;
+      scoreEl.textContent = g.active ? formatScore(g.score) : 'COMING SOON';
+
+      info.appendChild(nameEl);
+      info.appendChild(scoreEl);
+      slot.appendChild(iconWrap);
+      slot.appendChild(info);
+
+      if(g.active) {
+        slot.addEventListener('click', () => { window.location.href = g.url; });
+      }
+
+      grid.appendChild(slot);
+    });
+  }
+
+  updateTotal();
+}
+
+function formatScore(n) {
+  return String(n).padStart(6,'0') + ' PTS';
+}
+
+function updateTotal() {
+  const total = GAMES.reduce((sum, g) => sum + (g.active ? g.score : 0), 0);
+  document.getElementById('total-score').textContent = String(total).padStart(6,'0');
+}
+
+buildGrid();
+window.addEventListener('resize', buildGrid);
+</script>
+</body>
+</html>
