@@ -731,6 +731,18 @@ function drawClubMenu() {
 }
 
 // ── AIM GUIDE ────────────────────────────────────────────────
+// ── PUTT POWER CURVE ─────────────────────────────────────────
+// Maps raw drag fraction (0-1) to output power fraction (0-1)
+// Lower third = precision zone (0→10%), upper two thirds = quadratic ramp (10→100%)
+function puttPowerCurve(rawFrac) {
+  if (rawFrac < 1/3) {
+    return rawFrac * 0.3;                          // 0-33% drag → 0-10% power (linear, precise)
+  } else {
+    const t = (rawFrac - 1/3) / (2/3);            // normalize upper zone to 0-1
+    return 0.1 + 0.9 * t * t;                     // quadratic ramp 10→100%
+  }
+}
+
 function drawAimGuide() {
   const h = hole;
   const cl = CLUBS[selectedClub];
@@ -748,31 +760,39 @@ function drawAimGuide() {
 
   const dx = dragStart.x - dragCurrent.x;
   const dy = dragStart.y - dragCurrent.y;
-  const power = Math.min(Math.hypot(dx, dy), maxPx * 0.6);
-  if (power < 6) return;
+  const rawDist = Math.min(Math.hypot(dx, dy), maxPx * 0.6);
+  const isPutt = phase === 'putting';
+
+  // For putting: apply non-linear curve to raw drag → output power
+  // For irons: linear (rawFrac maps directly to power)
+  const rawFrac = rawDist / (maxPx * 0.6);
+  const outFrac = isPutt ? puttPowerCurve(rawFrac) : rawFrac;
+  const power   = outFrac * (maxPx * 0.6);
+
+  // Minimum threshold: 4px raw drag for putts, 6px for irons
+  if (rawDist < (isPutt ? 4 : 6)) return;
 
   const angle = Math.atan2(dy, dx);
   const windAng = hole.windDir;
   const windStr = hole.windSpeed * 0.00015;
-  const isPutt = phase === 'putting';
 
-  // Aim preview: shows ~40% of actual flight for fairway shots (forces judgment),
-  // full path for putts (precision needed on green)
-  const friction    = isPutt ? 0.92 : 0.978;
-  const previewSteps = isPutt ? 80 : 32;  // short preview for fairway shots
+  // Aim preview: short arc for fairway shots, full path for putts
+  const friction     = isPutt ? 0.955 : 0.985;
+  const previewSteps = isPutt ? 80 : 32;
 
   let sx = ball.x, sy = ball.y;
-  let svx = Math.cos(angle) * power * 0.055;
-  let svy = Math.sin(angle) * power * 0.055;
+  let svx = Math.cos(angle) * power * CLUBS[selectedClub].speedMult;
+  let svy = Math.sin(angle) * power * CLUBS[selectedClub].speedMult;
   let lastX = sx, lastY = sy;
 
   for (let i = 0; i < previewSteps; i++) {
     if (!isPutt) {
       svx += Math.cos(windAng) * windStr * Math.abs(svy);
     } else {
-      // Putting: apply slope nudge in preview
-      svx += Math.cos(hole.slopeAng) * hole.slopeMag * 0.3;
-      svy += Math.sin(hole.slopeAng) * hole.slopeMag * 0.3;
+      // Slope nudge in preview
+      const spd = Math.hypot(svx, svy);
+      svx += Math.cos(hole.slopeAng) * hole.slopeMag * spd;
+      svy += Math.sin(hole.slopeAng) * hole.slopeMag * spd;
     }
     svx *= friction; svy *= friction;
     sx += svx; sy += svy;
@@ -785,7 +805,7 @@ function drawAimGuide() {
       ctx.fillRect(Math.round(sx) - ds/2, Math.round(sy) - ds/2, ds, ds);
     }
     lastX = sx; lastY = sy;
-    if (Math.hypot(svx, svy) < 0.15) break;
+    if (Math.hypot(svx, svy) < 0.05) break;
   }
 
   // Blinking X at end of preview arc
@@ -796,16 +816,15 @@ function drawAimGuide() {
     ctx.fillText('X', lastX, lastY + 5);
   }
 
-  // Power bar
-  const pct = power / (maxPx * 0.6);
-  const barW = pct * (canvas.width * 0.7);
+  // Power bar — shows OUTPUT power % (after curve), not raw drag %
+  const barW = outFrac * (canvas.width * 0.7);
   const barX = canvas.width * 0.15;
   const barY = ball.y + 20;
   ctx.fillStyle = 'rgba(0,0,0,0.6)'; ctx.fillRect(barX, barY, canvas.width * 0.7, 10);
-  ctx.fillStyle = pct > 0.8 ? '#ff5454' : pct > 0.5 ? '#ffff54' : '#54ff54';
+  ctx.fillStyle = outFrac > 0.8 ? '#ff5454' : outFrac > 0.5 ? '#ffff54' : '#54ff54';
   ctx.fillRect(barX, barY, barW, 10);
   ctx.fillStyle = '#fff'; ctx.font = `10px 'Press Start 2P'`; ctx.textAlign = 'right';
-  ctx.fillText(Math.round(pct*100)+'%', barX + canvas.width*0.7 - 2, barY + 9);
+  ctx.fillText(Math.round(outFrac*100)+'%', barX + canvas.width*0.7 - 2, barY + 9);
 }
 
 // ── FLIGHT ANIMATION ─────────────────────────────────────────
@@ -920,12 +939,20 @@ function onUp(e) {
   const dy = dragStart.y - dragCurrent.y;
   const cl = CLUBS[selectedClub];
   const maxPx = cl.maxYards * hole.pxPerYard;
-  const power = Math.min(Math.hypot(dx, dy), maxPx * 0.6);
-  if (power < 8) { dragStart = null; dragCurrent = null; return; }
+  const isPutt = phase === 'putting';
+  const rawDist = Math.min(Math.hypot(dx, dy), maxPx * 0.6);
+
+  // Lower minimum threshold for putting so tiny taps fire
+  const minDist = isPutt ? 3 : 8;
+  if (rawDist < minDist) { dragStart = null; dragCurrent = null; return; }
+
+  // Apply non-linear curve for putting, linear for irons
+  const rawFrac = rawDist / (maxPx * 0.6);
+  const outFrac = isPutt ? puttPowerCurve(rawFrac) : rawFrac;
+  const power   = outFrac * (maxPx * 0.6);
 
   const angle = Math.atan2(dy, dx);
-  const cl2 = CLUBS[selectedClub];
-  const speed = power * cl2.speedMult;
+  const speed = power * cl.speedMult;
 
   ball.vx = Math.cos(angle) * speed;
   ball.vy = Math.sin(angle) * speed;
