@@ -261,7 +261,7 @@ document.getElementById('day-label').textContent =
 const GAMES = [
   {name:'LUNAR\nLANDER',  loc:'CAPE CANAVERAL', url:'lunar-lander.html', active:true,  score:0, iconFn:'iconLunarLander'},
   {name:'STONE\nCOLD',    loc:'CALGARY, CANADA', url:'stone-cold.html',   active:true,  score:0, iconFn:'iconCurling'},
-  {name:'SUB\nHUNTER',    loc:'N. ATLANTIC',     url:'#',                 active:false, score:0, iconFn:'iconSub'},
+  {name:'FAIR\nWAY',      loc:'PEBBLE BEACH',    url:'fairway.html',      active:true,  score:0, iconFn:'iconGolf'},
   {name:'SKI\nJUMP',      loc:'SWISS ALPS',      url:'#',                 active:false, score:0, iconFn:'iconSki'},
   {name:'TANK\nBATTLE',   loc:'UKRAINE',         url:'#',                 active:false, score:0, iconFn:'iconTank'},
   {name:'ASTEROID\nRUN',  loc:'DEEP SPACE',      url:'#',                 active:false, score:0, iconFn:'iconAsteroid'},
@@ -585,8 +585,49 @@ function iconCurling(ctx, s) {
   px(ctx,"#c8a870", 9*u,13*u,3*u,u); // broom head
 }
 
+function iconGolf(ctx, s) {
+  const u = s/16;
+  // Sky gradient (light blue)
+  px(ctx,'#54b4ff', 0,0,16*u,9*u);
+  // Fairway (green stripes)
+  px(ctx,'#2d8a2d', 0,9*u,16*u,7*u);
+  px(ctx,'#34a034', 0,10*u,16*u,u);
+  px(ctx,'#34a034', 0,12*u,16*u,u);
+  px(ctx,'#34a034', 0,14*u,16*u,u);
+  // Green (lighter)
+  px(ctx,'#44dd44', 8*u,7*u,8*u,5*u);
+  px(ctx,'#55ee55', 9*u,8*u,6*u,3*u);
+  // Flag pole
+  px(ctx,'#ffffff', 11*u,3*u,u,6*u);
+  // Flag
+  px(ctx,'#ff5454', 12*u,3*u,3*u,u);
+  px(ctx,'#ff5454', 12*u,4*u,2*u,u);
+  // Golf ball (white circle, pixel art)
+  px(ctx,'#ffffff', 5*u,9*u,3*u,u);
+  px(ctx,'#ffffff', 4*u,10*u,5*u,u);
+  px(ctx,'#ffffff', 4*u,11*u,5*u,u);
+  px(ctx,'#ffffff', 5*u,12*u,3*u,u);
+  // Dimple dots on ball
+  px(ctx,'#cccccc', 5*u,10*u,u,u);
+  px(ctx,'#cccccc', 7*u,10*u,u,u);
+  px(ctx,'#cccccc', 6*u,11*u,u,u);
+  // Ball shadow
+  px(ctx,'rgba(0,0,0,0.25)', 5*u,13*u,3*u,u);
+  // Golfer silhouette (tiny)
+  px(ctx,'#1a3a1a', 2*u,7*u,u,2*u);  // legs
+  px(ctx,'#1a3a1a', 3*u,7*u,u,2*u);
+  px(ctx,'#1a3a1a', 2*u,5*u,2*u,2*u); // body
+  px(ctx,'#ffcf87', 2*u,4*u,2*u,u);   // head
+  px(ctx,'#1a3a1a', u,6*u,2*u,u);     // club backswing
+  // Trees in rough
+  px(ctx,'#1a5c1a', 14*u,5*u,2*u,4*u);
+  px(ctx,'#236623', 13*u,4*u,3*u,3*u);
+  px(ctx,'#1a5c1a', 0,5*u,2*u,4*u);
+  px(ctx,'#236623', 0,4*u,2*u,3*u);
+}
+
 const ICON_FNS = {
-  iconLunarLander, iconCurling, iconCar, iconSub, iconSki, iconTank,
+  iconLunarLander, iconCurling, iconGolf, iconCar, iconSub, iconSki, iconTank,
   iconAsteroid, iconJungle, iconPlane, iconGold, iconDiver
 };
 
