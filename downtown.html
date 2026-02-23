@@ -238,17 +238,13 @@ function inGreen(angle, si) {
 }
 
 // ── WHEEL SPEED — normalized to wheel radius for consistent feel ──────────
-// We want the dot to travel the same arc-length per frame regardless of screen size.
-// arc_length = radius * angle, so angle = target_pixels / radius.
-// Target: ~2.5 pixels/frame at top speed, ~0.6 at slowest (at 60fps baseline).
-function wheelSpd(angle) {
-  const dt     = Math.min(deltaTime, 50) / 16.67;  // frame-time normalization
-  const g      = getG();
-  const R      = Math.min(g.W * 0.135, 48);        // same formula as drawWheels
-  const fastPx = 2.5;  // pixels of arc at fastest point
-  const slowPx = 0.6;  // pixels of arc at slowest point
-  const base   = slowPx / R;
-  const amp    = (fastPx - slowPx) / R;
+function wheelSpd(angle, R) {
+  const dt     = Math.min(deltaTime, 50) / 16.67;
+  const r      = R || Math.min(canvas.width * 0.135, 48);
+  const fastPx = 2.5;
+  const slowPx = 0.6;
+  const base   = slowPx / r;
+  const amp    = (fastPx - slowPx) / r;
   return (base + amp * (1 - Math.sin(angle))) * dt;
 }
 
