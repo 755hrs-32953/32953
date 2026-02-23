@@ -361,7 +361,7 @@ function update() {
     aimAngle = (aimAngle - wheelSpd(aimAngle) + Math.PI * 2) % (Math.PI * 2);
   }
   if (phase === 'ball_flight' && ball) {
-    ball.progress += 0.007;
+    ball.progress += 0.007 * (Math.min(deltaTime, 50) / 16.67);
     if (ball.progress >= 1) {
       ball.progress = 1;
       const made = ball.made;
