@@ -1,0 +1,1125 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
+<title>32953 — DOWNTOWN</title>
+<style>
+  @import url('https://fonts.googleapis.com/css2?family=Press+Start+2P&display=swap');
+
+  :root {
+    --c64-blue:   #3568b4;
+    --c64-purple: #7b68ee;
+    --c64-dark:   #4a3fa0;
+    --c64-yellow: #ffff54;
+    --c64-white:  #ffffff;
+    --c64-green:  #54ff54;
+    --c64-red:    #ff5454;
+    --c64-cyan:   #54ffff;
+    --c64-orange: #ff8800;
+  }
+
+  * { margin:0; padding:0; box-sizing:border-box; }
+
+  html, body {
+    width:100%; height:100%;
+    background:#000;
+    display:flex; align-items:center; justify-content:center;
+    overflow:hidden;
+    font-family:'Press Start 2P', monospace;
+    position:fixed; top:0; left:0; right:0; bottom:0;
+  }
+
+  #app {
+    width:380px;
+    background:#1a1a40;
+    display:flex; flex-direction:column;
+    position:relative; overflow:hidden;
+    border:3px solid var(--c64-dark);
+    box-shadow:0 0 40px #7b68ee44;
+  }
+
+  #header {
+    background:var(--c64-purple);
+    border-bottom:4px solid var(--c64-dark);
+    padding:6px 12px;
+    display:flex; align-items:center; justify-content:space-between;
+    flex-shrink:0;
+  }
+  #logo       { font-size:13px; color:#fff; letter-spacing:3px; text-shadow:2px 2px 0 var(--c64-dark); }
+  #game-label { font-size:10px; color:#d4c0ff; letter-spacing:2px; }
+
+  #game-wrap { flex:1; position:relative; overflow:hidden; min-height:0; }
+  canvas     { display:block; width:100%; height:100%; image-rendering:pixelated; }
+
+  #overlay {
+    position:absolute; inset:0;
+    background:rgba(0,0,40,0.94);
+    display:flex; flex-direction:column;
+    align-items:center; justify-content:center;
+    z-index:20; padding:16px; gap:8px;
+  }
+
+  #ov-title {
+    font-size:22px; color:#fff; letter-spacing:4px;
+    text-align:center; text-shadow:3px 3px 0 var(--c64-dark);
+    line-height:1.8; margin-bottom:4px;
+  }
+  #ov-sub { font-size:10px; color:#b8a8ff; letter-spacing:2px; margin-bottom:8px; }
+
+  .ov-rule { font-size:10px; color:var(--c64-cyan); letter-spacing:1px; text-align:center; line-height:2.4; }
+  .ov-rule span { color:var(--c64-yellow); }
+
+  .big-btn {
+    font-family:'Press Start 2P',monospace; font-size:11px; padding:11px 28px;
+    background:var(--c64-yellow); color:#000; border:3px solid #fff;
+    cursor:pointer; letter-spacing:2px; box-shadow:4px 4px 0 var(--c64-dark);
+    margin-top:8px;
+  }
+  .big-btn:active { transform:translate(2px,2px); box-shadow:2px 2px 0 var(--c64-dark); }
+
+  .small-btn {
+    font-family:'Press Start 2P',monospace; font-size:10px; padding:8px 14px;
+    background:transparent; color:var(--c64-cyan);
+    border:2px solid var(--c64-cyan); cursor:pointer; letter-spacing:1px;
+  }
+  .small-btn:active { background:var(--c64-cyan); color:#000; }
+
+  #ov-result    { font-size:16px; letter-spacing:3px; text-align:center; margin-bottom:3px; }
+  #ov-breakdown { font-size:10px; color:var(--c64-cyan); text-align:center; line-height:2.4; letter-spacing:1px; margin-bottom:6px; }
+  #ov-score-big { font-size:16px; color:var(--c64-yellow); letter-spacing:3px; text-shadow:2px 2px 0 var(--c64-dark); margin-bottom:10px; }
+
+  #botbar {
+    background:var(--c64-purple);
+    border-top:4px solid var(--c64-dark);
+    padding:4px 10px;
+    display:flex; justify-content:space-between; align-items:center;
+    flex-shrink:0;
+  }
+  .bot-item { font-size:10px; color:#d4c0ff; letter-spacing:1px; }
+  .bot-val  { color:var(--c64-yellow); }
+
+  @keyframes blink { 0%,49%{opacity:1}50%,100%{opacity:0} }
+</style>
+</head>
+<body>
+<div id="app">
+  <div id="header">
+    <div id="logo">32953</div>
+    <div id="game-label">DOWNTOWN</div>
+  </div>
+  <div id="game-wrap">
+    <canvas id="c"></canvas>
+    <div id="overlay"></div>
+  </div>
+  <div id="botbar">
+    <div class="bot-item" id="bot-spot">SPOT 1/5</div>
+    <div class="bot-item">MAKES: <span class="bot-val" id="bot-makes-val">0/0</span></div>
+    <div class="bot-item">SCORE: <span class="bot-val" id="bot-score-val">0</span></div>
+  </div>
+</div>
+
+<script>
+// ── CANVAS ────────────────────────────────────────────────
+const canvas = document.getElementById('c');
+const ctx    = canvas.getContext('2d');
+const wrap   = document.getElementById('game-wrap');
+
+function fixHeight() {
+  const app = document.getElementById('app');
+  const h   = window.innerHeight;
+  app.style.height = app.style.maxHeight = h + 'px';
+}
+fixHeight();
+window.addEventListener('resize', () => { fixHeight(); resize(); if(gameRunning) draw(); });
+window.addEventListener('orientationchange', () => setTimeout(fixHeight, 200));
+
+function resize() {
+  canvas.width  = wrap.clientWidth;
+  canvas.height = wrap.clientHeight;
+}
+resize();
+
+// ── PALETTE ───────────────────────────────────────────────
+const C = {
+  yellow:'#ffff54', white:'#ffffff', green:'#54ff54',
+  red:'#ff5454', cyan:'#54ffff', purple:'#7b68ee',
+  dark:'#4a3fa0', blue:'#3568b4', orange:'#ff8800',
+  skin:'#f0c87a', hair:'#3a2000',
+};
+
+// ── COURT GEOMETRY ────────────────────────────────────────
+function getG() {
+  const W = canvas.width, H = canvas.height;
+  const bx = W / 2;          // basket x (center)
+  const by = H * 0.115;      // basket y (near top)
+  const rimR = W * 0.055;
+
+  // 3-pt arc: real D shape. Ellipse in perspective.
+  const arcRx  = W * 0.415;  // horiz radius to corner spots
+  const arcRy  = H * 0.415;  // vert radius
+  const arcCx  = bx;
+  const arcCy  = by;
+
+  // The "flat" y of the corner 3-pt lines (where arc meets side lanes)
+  // Real NBA: corner 3 lines are 14ft from baseline. We put them ~38% down.
+  const arcFlat = H * 0.38;
+
+  // Lane — starts at baseline (court top, y=33), ends at arcFlat
+  const laneW  = W * 0.26;
+  const laneT  = 33;          // baseline = top of court boundary
+  const laneB  = arcFlat;
+  const ftY    = laneT + (laneB - laneT) * 0.55;
+
+  return { W, H, bx, by, rimR, arcRx, arcRy, arcCx, arcCy, arcFlat, laneW, laneT, laneB, ftY };
+}
+
+// ── SHOOTING SPOTS ────────────────────────────────────────
+// Place spots visually ON the 3-pt arc, all within the visible canvas area.
+// The arc is an ellipse: x = arcCx + cos(a)*arcRx, y = arcCy - sin(a)*arcRy
+// But arcRy is large (H*0.415) so many arc points fall above the canvas.
+// The VISIBLE portion of the arc (y >= 32) is the lower part where sin(a) is small.
+// We position the 5 spots at specific canvas coordinates that look right on the court.
+function getSpot(idx) {
+  const g = getG();
+  const { arcCx, arcCy, arcRx, arcRy, arcFlat, W, H, by } = g;
+
+  // For wings and top-key: place along the arc at the y-level that's actually visible.
+  // The arc's visible lowest point (furthest from basket) is near the bottom of the arc.
+  // We sample y-positions for each spot and compute x from the ellipse equation.
+
+  // Target y-levels for each spot (as fraction of H)
+  const yFracs = [arcFlat - 12, arcFlat * 0.88, arcCy + arcRy * 0.62, arcFlat * 0.88, arcFlat - 12];
+  // For top-of-key: y = arcCy + arcRy * 0.62 means it sits below arcCy (toward player)
+  // x for wings/top: solve ellipse  x = arcCx ± sqrt((1 - ((y-arcCy)/arcRy)^2)) * arcRx
+  const signs = [-1, -1, 0, 1, 1]; // left side, left, center, right, right
+
+  // Derive the corner line x-positions the same way drawCourt does,
+  // so player spots align exactly with the drawn 3-pt corner lines.
+  const cosT   = (arcFlat - arcCy) / arcRy;
+  const thetaC = Math.acos(Math.max(-1, Math.min(1, cosT)));
+  const angL   = Math.PI - thetaC;
+  const angR   = thetaC;
+  const cLx    = arcCx + Math.cos(angL) * arcRx;  // left corner line x
+  const cRxVal = arcCx + Math.cos(angR) * arcRx;  // right corner line x
+
+  // Top-of-key: the arc's bottom at x=center. The ellipse equation gives
+  // y = arcCy + arcRy at the very bottom, but that may be off-screen.
+  // We clamp to H*0.52 so it's always visible but as far down as possible.
+  const topY = Math.min(arcCy + arcRy * 0.95, H * 0.52);
+
+  // Wings: use arcFlat y-level on the ellipse (same y as corner endpoints)
+  const wLx = arcCx - Math.sqrt(Math.max(0, 1 - Math.pow((arcFlat - arcCy) / arcRy, 2))) * arcRx;
+  const wRx = arcCx + Math.sqrt(Math.max(0, 1 - Math.pow((arcFlat - arcCy) / arcRy, 2))) * arcRx;
+
+  // Corner y: midway between top of court and arcFlat — sits on the corner sideline
+  // clearly below the backboard but above arcFlat (where the arc starts)
+  const cornerY = by + (arcFlat - by) * 0.30;
+
+  const spots = [
+    { x: 14,       y: cornerY },     // 0: L-corner — hugging left sideline
+    { x: wLx,      y: arcFlat },     // 1: L-wing   — confirmed good
+    { x: arcCx,    y: topY    },     // 2: Top-key  — confirmed good
+    { x: wRx,      y: arcFlat },     // 3: R-wing   — confirmed good
+    { x: W - 14,   y: cornerY },     // 4: R-corner — hugging right sideline
+  ];
+  return spots[idx];
+}
+
+// ── GREEN ZONE ────────────────────────────────────────────
+const GREEN_DEG    = [34, 26, 19, 13, 8];
+const GREEN_CENTER = 3 * Math.PI / 2;   // 12-o'clock on wheel
+
+function inGreen(angle, si) {
+  const half = GREEN_DEG[si] * Math.PI / 180;
+  let d = ((angle - GREEN_CENTER) % (Math.PI * 2) + Math.PI * 2) % (Math.PI * 2);
+  if (d > Math.PI) d -= Math.PI * 2;
+  return Math.abs(d) <= half;
+}
+
+// ── WHEEL SPEED — slow at bottom, faster at top ───────────
+// MUCH slower than v1
+function wheelSpd(angle) {
+  // sin(π/2)=1 (bottom=slow), sin(3π/2)=-1 (top=fast)
+  const base = 0.007;
+  const amp  = 0.018;
+  return base + amp * (1 - Math.sin(angle));
+}
+
+// ── STATE ─────────────────────────────────────────────────
+let gameRunning = false;
+let score = 0, makes = 0, totalShots = 0;
+let spotIdx = 0, shotInSpot = 0;
+let shotHistory = [];
+let phase = 'idle'; // idle|spin_power|spin_aim|ball_flight|transition
+
+let powerAngle = Math.PI / 2, aimAngle = Math.PI / 2;
+let powerLocked = false, aimLocked = false;
+let powerGood = false, aimGood = false;
+
+let ball = null;    // {sx,sy,tx,ty,progress,made}
+let ballTrail = [];
+let crowd = [];
+let frameCount = 0;
+let animId = null;
+let flashMsg = null, flashColor = C.yellow, flashUntil = 0;
+
+// ── CROWD ─────────────────────────────────────────────────
+const PARKAS = ['#ff5454','#54ffff','#54ff54','#ffff54','#ff88ff','#ffffff','#ff8800','#aa54ff','#3568b4'];
+const HATS   = ['#ffffff','#ffff54','#ff5454','#54ffff','#aaaaaa','#ff88ff'];
+
+function buildCrowd() {
+  const { W } = getG();
+  crowd = [];
+  for (let i = 0; i < 32; i++) {
+    const x = 8 + (i % 16) * ((W - 16) / 15);
+    crowd.push({
+      x, y: 6 + Math.floor(i / 16) * 14,
+      parka: PARKAS[i % PARKAS.length],
+      hat:   HATS[i % HATS.length],
+      wave:  i * 0.7,
+      waving: (i % 3 !== 0),
+    });
+  }
+}
+
+// ── OVERLAY ───────────────────────────────────────────────
+function showOverlay(html) {
+  const ov = document.getElementById('overlay');
+  ov.innerHTML = html;
+  ov.style.display = 'flex';
+}
+function hideOverlay() {
+  document.getElementById('overlay').style.display = 'none';
+}
+
+function showStart() {
+  showOverlay(`
+    <div id="ov-title">DOWN<br>TOWN</div>
+    <div id="ov-sub">3-POINT SHOOTOUT</div>
+    <div class="ov-rule">
+      TAP to stop each <span>WHEEL</span><br>
+      land in the <span>GREEN</span> to score<br>
+      <span>POWER</span> wheel first<br>
+      then <span>AIM</span> wheel<br>
+      &nbsp;<br>
+      5 spots &bull; 2 shots each<br>
+      spot 5 = <span>DOUBLE POINTS</span><br>
+      max score: <span>12 PTS</span>
+    </div>
+    <button class="big-btn" onclick="startGame()">SHOOT IT</button>
+  `);
+}
+
+// ── GAME FLOW ─────────────────────────────────────────────
+function startGame() {
+  hideOverlay();
+  score = makes = totalShots = spotIdx = shotInSpot = 0;
+  shotHistory = [];
+  ball = null; ballTrail = [];
+  gameRunning = true;
+  buildCrowd();
+  updateBot();
+  beginPower();
+}
+
+function beginPower() {
+  phase       = 'spin_power';
+  powerAngle  = Math.PI / 2;
+  aimAngle    = Math.PI / 2;
+  powerLocked = aimLocked = false;
+  powerGood   = aimGood = false;
+  ball        = null;
+  ballTrail   = [];
+  updateBot();  // update spot/shot display immediately when new shot begins
+  if (!animId) loop();
+}
+
+function loop() {
+  animId = requestAnimationFrame(loop);
+  frameCount++;
+  update();
+  draw();
+}
+
+function stopLoop() {
+  if (animId) { cancelAnimationFrame(animId); animId = null; }
+}
+
+// ── UPDATE ────────────────────────────────────────────────
+function update() {
+  if (phase === 'spin_power' && !powerLocked) {
+    powerAngle = (powerAngle + wheelSpd(powerAngle)) % (Math.PI * 2);
+  }
+  if (phase === 'spin_aim' && !aimLocked) {
+    aimAngle = (aimAngle - wheelSpd(aimAngle) + Math.PI * 2) % (Math.PI * 2);
+  }
+  if (phase === 'ball_flight' && ball) {
+    ball.progress += 0.007;
+    if (ball.progress >= 1) {
+      ball.progress = 1;
+      const made = ball.made;
+      ball = null;
+      onShotLanded(made);
+      return;
+    }
+    const p = getBallPos();
+    ballTrail.push({ x: p.x, y: p.y });
+    if (ballTrail.length > 24) ballTrail.shift();
+  }
+  // Clear flash
+  if (flashMsg && Date.now() > flashUntil) flashMsg = null;
+}
+
+// ── TAP INPUT ─────────────────────────────────────────────
+canvas.addEventListener('pointerdown', handleTap);
+canvas.addEventListener('touchstart', e => e.preventDefault(), { passive: false });
+
+function handleTap() {
+  if (!gameRunning) return;
+  if (phase === 'spin_power' && !powerLocked) {
+    powerLocked = true;
+    powerGood   = inGreen(powerAngle, spotIdx);
+    setTimeout(() => { if (gameRunning) phase = 'spin_aim'; }, 380);
+  } else if (phase === 'spin_aim' && !aimLocked) {
+    aimLocked = true;
+    aimGood   = inGreen(aimAngle, spotIdx);
+    setTimeout(() => { if (gameRunning) fireBall(); }, 380);
+  }
+}
+
+// ── FIRE BALL ─────────────────────────────────────────────
+function fireBall() {
+  const sp   = getSpot(spotIdx);
+  const g    = getG();
+  const made = powerGood && aimGood;
+
+  // Basket center
+  const bx = g.bx, by = g.by;
+  const rimR = g.rimR;
+
+  let tx, ty;
+  if (made) {
+    // Swish — lands right in the middle of the rim
+    tx = bx;
+    ty = by + rimR * 0.4;
+  } else {
+    // Miss — always lands AWAY from the basket
+    // Offset far enough that it never looks like it went in
+    if (!powerGood && !aimGood) {
+      // Both bad: way off to side AND short (lands past basket downward)
+      tx = bx + (Math.random() > 0.5 ? 1 : -1) * (rimR * 2.5 + Math.random() * rimR * 2);
+      ty = by + rimR * 3 + Math.random() * rimR * 2;
+    } else if (!powerGood) {
+      // Bad power: short — ball lands clearly below the rim
+      tx = bx + (Math.random() - 0.5) * rimR * 1.5;
+      ty = by + rimR * 4 + Math.random() * rimR;
+    } else {
+      // Bad aim: off to the side — past the rim laterally
+      tx = bx + (Math.random() > 0.5 ? 1 : -1) * (rimR * 2.2 + Math.random() * rimR * 1.5);
+      ty = by + rimR * 0.8;
+    }
+  }
+
+  phase = 'ball_flight';
+  ball  = { sx: sp.x, sy: sp.y, tx, ty, progress: 0, made };
+  ballTrail = [];
+}
+
+function getBallPos() {
+  if (!ball) return { x: 0, y: 0 };
+  const t  = ball.progress;
+  const et = t < 0.5 ? 4*t*t*t : 1 - Math.pow(-2*t+2, 3) / 2;
+  const x  = ball.sx + (ball.tx - ball.sx) * et;
+  const arcH = ball.made ? 0.27 : 0.18;
+  const y  = ball.sy + (ball.ty - ball.sy) * et - Math.sin(t * Math.PI) * canvas.height * arcH;
+  return { x, y };
+}
+
+// ── SHOT LANDED ───────────────────────────────────────────
+function onShotLanded(made) {
+  shotHistory.push({ spotIdx, shotIdx: shotInSpot, made });
+  totalShots++;
+  const dbl = spotIdx === 4;
+  if (made) { makes++; score += dbl ? 2 : 1; }
+  updateBot();
+
+  flashMsg   = made ? (dbl ? 'FROM DOWNTOWN! +2' : 'GOOD! +1') : 'NO GOOD';
+  flashColor = made ? (dbl ? C.yellow : C.green) : C.red;
+  flashUntil = Date.now() + 1000;
+
+  setTimeout(() => {
+    flashMsg = null;
+    advanceShot();
+  }, 1000);
+}
+
+function advanceShot() {
+  shotInSpot++;
+  if (shotInSpot >= 2) {
+    shotInSpot = 0;
+    spotIdx++;
+    if (spotIdx >= 5) {
+      setTimeout(showResult, 400);
+      return;
+    }
+    phase = 'transition';
+    setTimeout(() => { if (gameRunning) beginPower(); }, 500);
+  } else {
+    beginPower();
+  }
+}
+
+function updateBot() {
+  document.getElementById('bot-spot').textContent      = 'SPOT ' + (spotIdx + 1) + '/5';
+  document.getElementById('bot-makes-val').textContent = makes + '/' + totalShots;
+  document.getElementById('bot-score-val').textContent = score;
+}
+
+// ── RESULT ────────────────────────────────────────────────
+function showResult() {
+  gameRunning = false;
+  stopLoop();
+  draw();
+
+  let grade;
+  if (score >= 12)      grade = 'PERFECT GAME!';
+  else if (score >= 9)  grade = 'ON FIRE!';
+  else if (score >= 6)  grade = 'MONEY PLAYER';
+  else if (score >= 4)  grade = 'SOLID EFFORT';
+  else                  grade = 'BACK TO GYM';
+
+  const pct = totalShots > 0 ? Math.round(makes / totalShots * 100) : 0;
+  const dbl = shotHistory.filter(h => h.spotIdx === 4 && h.made).length * 2;
+  const col = score >= 8 ? C.yellow : C.cyan;
+
+  showOverlay(`
+    <div id="ov-result" style="color:${col};text-shadow:2px 2px 0 #4a3fa0">${grade}</div>
+    <div id="ov-breakdown">
+      SHOTS MADE: ${makes} / 10<br>
+      FIELD GOAL: ${pct}%<br>
+      SPOT 5 (2X): ${dbl} PTS
+    </div>
+    <div id="ov-score-big">SCORE: ${score} / 12</div>
+    <button class="big-btn" onclick="restartGame()">SHOOT AGAIN</button>
+    <button class="small-btn" onclick="window.location.href='index.html'">&#9664; HOME</button>
+  `);
+}
+
+function restartGame() {
+  hideOverlay();
+  stopLoop();
+  animId = null;
+  startGame();
+}
+
+// ── DRAW ──────────────────────────────────────────────────
+function draw() {
+  const g = getG();
+  ctx.clearRect(0, 0, g.W, g.H);
+  drawCrowd(g);
+  drawCourt(g);
+  drawBackboard(g);
+  drawShotDots(g);
+  if (ball) { drawBallTrail(); drawBall(g); }
+  if (phase !== 'ball_flight') drawPlayer(g);
+  drawWheels(g);
+  if (flashMsg) drawFlash(g);
+}
+
+// ── DRAW CROWD ────────────────────────────────────────────
+function drawCrowd(g) {
+  crowd.forEach((sp, i) => {
+    const woff = sp.waving ? Math.sin(frameCount * 0.06 + sp.wave) * 2 : 0;
+    const x = sp.x, y = sp.y + woff;
+    ctx.fillStyle = sp.parka;  ctx.fillRect(Math.round(x-4), Math.round(y-4), 9, 10);
+    ctx.fillStyle = C.skin;    ctx.fillRect(Math.round(x-2), Math.round(y-9), 5, 5);
+    ctx.fillStyle = sp.hat;    ctx.fillRect(Math.round(x-3), Math.round(y-12), 7, 4);
+                               ctx.fillRect(Math.round(x-2), Math.round(y-14), 5, 3);
+    if (sp.waving) {
+      ctx.fillStyle = sp.parka;
+      ctx.fillRect(Math.round(x+5), Math.round(y-8 + Math.sin(frameCount*0.1+sp.wave)*4), 3, 6);
+    }
+  });
+}
+
+// ── DRAW COURT ────────────────────────────────────────────
+function drawCourt(g) {
+  const { W, H, bx, by, arcCx, arcCy, arcRx, arcRy, arcFlat, laneW, laneT, laneB, ftY } = g;
+
+  // ── WOOD FLOOR ──
+  // Base hardwood color
+  ctx.fillStyle = '#b8692a';
+  ctx.fillRect(0, 28, W, H - 28);
+
+  // Wood grain — perspective plank lines (denser near top)
+  for (let i = 0; i <= 55; i++) {
+    const t = i / 55;
+    const y = Math.round(28 + t * t * (H - 28));
+    ctx.fillStyle = i % 5 === 0 ? 'rgba(0,0,0,0.20)' : 'rgba(0,0,0,0.09)';
+    ctx.fillRect(0, y, W, 1);
+  }
+
+  // Wood highlight variation (alternating strips lighter/darker)
+  for (let i = 0; i < 16; i++) {
+    const t1 = (i) / 16, t2 = (i + 0.5) / 16;
+    const y1 = Math.round(28 + t1 * t1 * (H - 28));
+    const y2 = Math.round(28 + t2 * t2 * (H - 28));
+    ctx.fillStyle = i % 2 === 0 ? 'rgba(255,180,80,0.07)' : 'rgba(0,0,0,0.04)';
+    ctx.fillRect(0, y1, W, Math.max(1, y2 - y1));
+  }
+
+  // ── COURT LINES ──
+  const lw = 2;
+  ctx.strokeStyle = 'rgba(255,255,255,0.85)';
+  ctx.lineWidth   = lw;
+
+  // Court boundary
+  ctx.strokeRect(5, 32, W - 10, H - 38);
+
+  // ── 3-POINT LINE (real D-shape) ──
+  // The arc runs from left corner to right corner, arcing around the basket
+  // Corner x coords on the arc at y = arcFlat
+  const cosT    = (arcFlat - arcCy) / arcRy;
+  const thetaC  = Math.acos(Math.max(-1, Math.min(1, cosT)));
+  // In canvas ellipse coords: 0=right, π=left, π/2=bottom
+  // We want the arc from (left side, arcFlat) going up and around basket to (right side, arcFlat)
+  // On an ellipse: y = arcCy + sin(θ)*arcRy, top=–arcRy (θ=–π/2=3π/2)
+  // At arcFlat: sin(θ) = (arcFlat - arcCy)/arcRy = cosT (since we computed acos)
+  // angles on ellipse for the two corners:
+  const angL = Math.PI - thetaC;   // left corner (in [π/2, π])
+  const angR = thetaC;             // right corner (in [0, π/2])
+  // Arc from angL going CCW to angR (through the top, 3π/2 / or –π/2)
+  ctx.beginPath();
+  ctx.ellipse(arcCx, arcCy, arcRx, arcRy, 0, angL, angR, true); // anticlockwise=true goes up through top
+  ctx.stroke();
+
+  // Corner sidelines: from arc endpoints straight up to near-baseline
+  // The arc endpoints are at angles angL and angR on the ellipse
+  const cLx = arcCx + Math.cos(angL) * arcRx;
+  const cLy = arcCy + Math.sin(angL) * arcRy;  // actual y at arc endpoint
+  const cRx = arcCx + Math.cos(angR) * arcRx;
+  const cRy = arcCy + Math.sin(angR) * arcRy;  // actual y at arc endpoint
+
+  ctx.beginPath();
+  ctx.moveTo(cLx, cLy);
+  ctx.lineTo(cLx, 33);   // straight up to near-baseline
+  ctx.stroke();
+
+  ctx.beginPath();
+  ctx.moveTo(cRx, cRy);
+  ctx.lineTo(cRx, 33);   // straight up to near-baseline
+  ctx.stroke();
+
+  // ── LANE / PAINT ──
+  // Blue paint only from baseline (laneT) to free throw line (ftY).
+  // The lane lines (sides) extend further to laneB, but paint stops at ftY.
+  const laneL = arcCx - laneW / 2;
+  const laneR = arcCx + laneW / 2;
+  const cr    = 5;
+
+  // Paint fill: laneT → ftY only
+  ctx.fillStyle = 'rgba(44,70,150,0.28)';
+  ctx.beginPath();
+  ctx.moveTo(laneL + cr, laneT);
+  ctx.lineTo(laneR - cr, laneT);
+  ctx.arcTo(laneR, laneT, laneR, laneT + cr, cr);
+  ctx.lineTo(laneR, ftY);
+  ctx.lineTo(laneL, ftY);
+  ctx.lineTo(laneL, laneT + cr);
+  ctx.arcTo(laneL, laneT, laneL + cr, laneT, cr);
+  ctx.closePath();
+  ctx.fill();
+
+  // Lane side lines: only to ftY (FT line is the bottom of the box)
+  ctx.strokeStyle = 'rgba(255,255,255,0.85)';
+  ctx.lineWidth   = lw;
+  ctx.beginPath();
+  ctx.moveTo(laneL, laneT);
+  ctx.lineTo(laneL, ftY);
+  ctx.moveTo(laneR, laneT);
+  ctx.lineTo(laneR, ftY);
+  ctx.stroke();
+
+  // ── FREE THROW LINE ──
+  ctx.beginPath();
+  ctx.moveTo(arcCx - laneW/2, ftY);
+  ctx.lineTo(arcCx + laneW/2, ftY);
+  ctx.stroke();
+
+  // FT circle (top half solid, bottom dashed)
+  const ftRx = laneW / 2;
+  const ftRy = ftRx * 0.30;
+  ctx.beginPath();
+  ctx.ellipse(arcCx, ftY, ftRx, ftRy, 0, Math.PI, 2*Math.PI);
+  ctx.stroke();
+  ctx.setLineDash([5, 6]);
+  ctx.beginPath();
+  ctx.ellipse(arcCx, ftY, ftRx, ftRy, 0, 0, Math.PI);
+  ctx.stroke();
+  ctx.setLineDash([]);
+
+  // ── CENTER COURT CIRCLE (near bottom for realism) ──
+  const ccY = H * 0.87;
+  ctx.beginPath();
+  ctx.ellipse(arcCx, ccY, W * 0.16, W * 0.055, 0, 0, Math.PI * 2);
+  ctx.strokeStyle = 'rgba(255,255,255,0.22)';
+  ctx.stroke();
+
+  // ── HIGHLIGHT CURRENT SPOT ──
+  if (phase !== 'ball_flight' && phase !== 'transition') {
+    const sp = getSpot(spotIdx);
+    const pulse = 0.5 + 0.5 * Math.sin(frameCount * 0.14);
+
+    ctx.beginPath();
+    ctx.arc(sp.x, sp.y, 12 + pulse * 4, 0, Math.PI * 2);
+    ctx.fillStyle = `rgba(255,255,84,${0.08 + pulse * 0.14})`;
+    ctx.fill();
+
+    ctx.beginPath();
+    ctx.arc(sp.x, sp.y, 4, 0, Math.PI * 2);
+    ctx.fillStyle = C.yellow;
+    ctx.fill();
+  }
+}
+
+// ── BACKBOARD & RIM ───────────────────────────────────────
+function drawBackboard(g) {
+  const { bx, by, rimR, W } = g;
+
+  const bbW   = W * 0.21;
+  const bbH   = 16;
+  const bbTop = by - 38;
+  const bbBot = bbTop + bbH;
+
+  // Support arm
+  ctx.strokeStyle = '#888';
+  ctx.lineWidth   = 3;
+  ctx.beginPath();
+  ctx.moveTo(bx, bbBot); ctx.lineTo(bx, by);
+  ctx.stroke();
+
+  // Board face
+  ctx.fillStyle   = '#e0e0e0';
+  ctx.fillRect(bx - bbW/2, bbTop, bbW, bbH);
+  ctx.strokeStyle = '#000';
+  ctx.lineWidth   = 2;
+  ctx.strokeRect(bx - bbW/2, bbTop, bbW, bbH);
+
+  // Shooter's box (red)
+  ctx.strokeStyle = C.red;
+  ctx.lineWidth   = 1.5;
+  ctx.strokeRect(bx - bbW*0.28, bbTop + 2, bbW*0.56, bbH - 4);
+
+  // Rim - two edges (perspective)
+  const rimRx = rimR;
+  const rimRy = rimR * 0.30;
+  const rimFY = by - rimR * 0.1;   // far edge y
+  const rimNY = by + rimR * 0.38;  // near edge y
+
+  // Net
+  ctx.strokeStyle = 'rgba(255,255,255,0.38)';
+  ctx.lineWidth   = 1;
+  for (let i = -3; i <= 3; i++) {
+    const nx = bx + (i/3) * rimRx * 0.84;
+    ctx.beginPath();
+    ctx.moveTo(nx, rimNY + rimRy * 0.4);
+    ctx.lineTo(bx + (i/3) * rimRx * 0.50, rimNY + rimRy * 0.4 + 14);
+    ctx.stroke();
+  }
+  ctx.beginPath();
+  ctx.ellipse(bx, rimNY + rimRy * 0.4 + 14, rimRx * 0.50, rimRy * 0.55, 0, 0, Math.PI * 2);
+  ctx.strokeStyle = 'rgba(255,255,255,0.18)';
+  ctx.stroke();
+
+  // Rim — single bright orange ellipse (near/front edge only)
+  ctx.beginPath();
+  ctx.ellipse(bx, rimNY, rimRx, rimRy, 0, 0, Math.PI * 2);
+  ctx.strokeStyle = C.orange;
+  ctx.lineWidth   = 4;
+  ctx.stroke();
+}
+
+// ── PLAYER SPRITE ─────────────────────────────────────────
+function drawPlayer(g) {
+  if (phase === 'transition') return;
+  const sp   = getSpot(spotIdx);
+  const px   = sp.x, py = sp.y;
+  const sc   = g.W / 380;
+
+  // Flip to face basket
+  const flip = px <= g.bx ? 1 : -1;
+
+  ctx.save();
+  ctx.translate(Math.round(px), Math.round(py));
+  ctx.scale(flip * sc, sc);
+
+  // Floor shadow
+  ctx.fillStyle = 'rgba(0,0,0,0.28)';
+  ctx.beginPath();
+  ctx.ellipse(0, 18, 14, 5, 0, 0, Math.PI * 2);
+  ctx.fill();
+
+  // Shoes
+  ctx.fillStyle = '#ffffff';
+  ctx.fillRect(-9, 14, 7, 5);
+  ctx.fillRect(3, 14, 7, 5);
+  ctx.fillStyle = '#3568b4';
+  ctx.fillRect(-8, 14, 2, 4);
+  ctx.fillRect(3, 14, 2, 4);
+
+  // Socks
+  ctx.fillStyle = '#ffffff';
+  ctx.fillRect(-7, 8, 5, 7);
+  ctx.fillRect(3, 8, 5, 7);
+
+  // Shorts
+  ctx.fillStyle = '#1a3a8a';
+  ctx.fillRect(-8, 1, 16, 9);
+  // Shorts stripe
+  ctx.fillStyle = '#ffffff';
+  ctx.fillRect(-8, 4, 16, 1);
+
+  // Jersey
+  ctx.fillStyle = C.red;
+  ctx.fillRect(-8, -14, 16, 16);
+  ctx.fillStyle = '#ffffff';
+  ctx.font = 'bold 8px monospace';
+  ctx.textAlign = 'center';
+  ctx.fillText('3', 0, -2);
+
+  // Jersey side stripes
+  ctx.fillStyle = '#ffffff';
+  ctx.fillRect(-8, -14, 2, 16);
+  ctx.fillRect(6, -14, 2, 16);
+
+  // Head
+  ctx.fillStyle = C.skin;
+  ctx.beginPath();
+  ctx.arc(0, -20, 7, 0, Math.PI * 2);
+  ctx.fill();
+
+  // Hair
+  ctx.fillStyle = C.hair;
+  ctx.fillRect(-7, -27, 14, 8);
+
+  // Shooting pose depends on phase
+  const holdingHigh = (phase === 'spin_aim');
+
+  // Left arm (guide hand)
+  ctx.fillStyle = C.skin;
+  if (holdingHigh) {
+    ctx.fillRect(-14, -22, 6, 10);
+  } else {
+    ctx.fillRect(-13, -14, 5, 9);
+  }
+
+  // Right arm (shooting arm)
+  if (holdingHigh) {
+    ctx.fillRect(8, -26, 5, 14);
+  } else {
+    ctx.fillRect(8, -18, 5, 10);
+  }
+
+  // Ball in hands
+  const bx2  = 16;
+  const by2  = holdingHigh ? -34 : -22;
+
+  ctx.fillStyle = 'rgba(0,0,0,0.20)';
+  ctx.beginPath();
+  ctx.ellipse(bx2+1, by2+1, 8, 8, 0, 0, Math.PI * 2);
+  ctx.fill();
+
+  ctx.fillStyle = C.orange;
+  ctx.beginPath();
+  ctx.arc(bx2, by2, 8, 0, Math.PI * 2);
+  ctx.fill();
+  ctx.strokeStyle = '#2a1000';
+  ctx.lineWidth = 1;
+  ctx.stroke();
+
+  // Seams
+  ctx.strokeStyle = 'rgba(0,0,0,0.50)';
+  ctx.lineWidth = 1;
+  ctx.beginPath();
+  ctx.moveTo(bx2-8, by2); ctx.lineTo(bx2+8, by2);
+  ctx.stroke();
+  const sa = frameCount * 0.04;
+  ctx.beginPath();
+  ctx.arc(bx2, by2, 5, sa, sa + Math.PI);
+  ctx.stroke();
+
+  ctx.restore();
+}
+
+// ── BALL IN FLIGHT ────────────────────────────────────────
+function drawBallTrail() {
+  ballTrail.forEach((p, i) => {
+    const alpha = (i / ballTrail.length) * 0.50;
+    const r     = 1.5 + (i / ballTrail.length) * 4;
+    ctx.fillStyle = `rgba(255,136,0,${alpha})`;
+    ctx.beginPath();
+    ctx.arc(p.x, p.y, r, 0, Math.PI * 2);
+    ctx.fill();
+  });
+}
+
+function drawBall(g) {
+  if (!ball) return;
+  const p  = getBallPos();
+  const t  = ball.progress;
+  const r  = Math.max(3, 8 * (1 - t * 0.38));
+
+  // Shadow on court
+  const st = t;
+  const sx = ball.sx + (ball.tx - ball.sx) * st;
+  const sy = ball.sy + (ball.ty - ball.sy) * st;
+  ctx.fillStyle = 'rgba(0,0,0,0.15)';
+  ctx.beginPath();
+  ctx.ellipse(sx, sy, r * 1.2, r * 0.4, 0, 0, Math.PI * 2);
+  ctx.fill();
+
+  // Ball
+  ctx.fillStyle   = C.orange;
+  ctx.beginPath();
+  ctx.arc(p.x, p.y, r, 0, Math.PI * 2);
+  ctx.fill();
+  ctx.strokeStyle = '#2a1000';
+  ctx.lineWidth   = 1;
+  ctx.stroke();
+
+  // Seams
+  ctx.strokeStyle = 'rgba(0,0,0,0.45)';
+  ctx.lineWidth   = 0.8;
+  ctx.beginPath();
+  ctx.moveTo(p.x - r, p.y); ctx.lineTo(p.x + r, p.y);
+  ctx.stroke();
+  const sp2 = t * Math.PI * 5;
+  ctx.beginPath();
+  ctx.arc(p.x, p.y, r * 0.65, sp2, sp2 + Math.PI);
+  ctx.stroke();
+
+  // Swish glow when made
+  if (ball.made && t > 0.75) {
+    const a = (t - 0.75) / 0.25;
+    ctx.beginPath();
+    ctx.arc(p.x, p.y, r + 5, 0, Math.PI * 2);
+    ctx.fillStyle = `rgba(255,255,84,${a * 0.35})`;
+    ctx.fill();
+  }
+}
+
+// ── SHOT HISTORY DOTS ─────────────────────────────────────
+function drawShotDots(g) {
+  const dotR  = 5;
+  const startX = 9;
+  const y      = 37;
+
+  for (let s = 0; s < 5; s++) {
+    for (let d = 0; d < 2; d++) {
+      const x   = startX + (s * 2 + d) * (dotR * 2 + 4);
+      const hit = shotHistory.find(h => h.spotIdx === s && h.shotIdx === d);
+      let col   = !hit ? (s === spotIdx ? 'rgba(255,255,84,0.45)' : 'rgba(255,255,255,0.18)')
+                       : (hit.made ? C.green : C.red);
+
+      ctx.beginPath();
+      ctx.arc(x, y, dotR, 0, Math.PI * 2);
+      ctx.fillStyle   = col;
+      ctx.fill();
+      ctx.strokeStyle = 'rgba(255,255,255,0.30)';
+      ctx.lineWidth   = 0.5;
+      ctx.stroke();
+
+      if (s === 4) {
+        ctx.fillStyle = 'rgba(255,255,84,0.75)';
+        ctx.font      = '5px monospace';
+        ctx.textAlign = 'center';
+        ctx.fillText('2', x, y + 2);
+      }
+    }
+    // Separator
+    if (s < 4) {
+      const sx = startX + (s * 2 + 2) * (dotR * 2 + 4) - 1;
+      ctx.fillStyle = 'rgba(255,255,255,0.22)';
+      ctx.fillRect(sx, y - dotR - 1, 1, dotR * 2 + 2);
+    }
+  }
+}
+
+// ── WHEELS ────────────────────────────────────────────────
+function drawWheels(g) {
+  if (phase !== 'spin_power' && phase !== 'spin_aim') return;
+
+  const { W, H } = g;
+  const R   = Math.min(W * 0.135, 48);
+  const gap = R * 0.75;
+  const cy  = H * 0.80;
+  const lx  = W/2 - R - gap;
+  const rx  = W/2 + R + gap;
+
+  // Panel backdrop
+  const panX = lx - R - 12, panW = (rx + R + 12) - panX;
+  ctx.fillStyle   = 'rgba(0,0,32,0.88)';
+  ctx.fillRect(panX, cy - R - 30, panW, R * 2 + 64);
+  ctx.strokeStyle = '#7b68ee';
+  ctx.lineWidth   = 2;
+  ctx.strokeRect(panX, cy - R - 30, panW, R * 2 + 64);
+
+  // Power wheel
+  drawWheel(lx, cy, R, powerAngle, powerLocked, phase === 'spin_power', 'POWER');
+
+  // Aim wheel (only active in spin_aim, else dim)
+  if (phase === 'spin_aim') {
+    drawWheel(rx, cy, R, aimAngle, aimLocked, true, 'AIM');
+  } else {
+    drawWheelDim(rx, cy, R, 'AIM');
+  }
+
+  // Blink tap prompt
+  if (frameCount % 30 < 20) {
+    ctx.fillStyle = C.cyan;
+    ctx.font      = `10px 'Press Start 2P'`;
+    ctx.textAlign = 'center';
+    ctx.fillText('TAP TO RELEASE', W/2, cy + R + 46);
+  }
+}
+
+function drawWheel(cx, cy, R, angle, locked, active, label) {
+  const half  = GREEN_DEG[spotIdx] * Math.PI / 180;
+  const gS    = GREEN_CENTER - half;
+  const gE    = GREEN_CENTER + half;
+  const good  = locked && inGreen(angle, spotIdx);
+  const bad   = locked && !inGreen(angle, spotIdx);
+
+  // Outer ring
+  ctx.beginPath();
+  ctx.arc(cx, cy, R + 5, 0, Math.PI * 2);
+  ctx.fillStyle   = active ? 'rgba(26,16,72,0.96)' : 'rgba(10,8,30,0.96)';
+  ctx.fill();
+  ctx.strokeStyle = active ? C.cyan : 'rgba(84,255,255,0.25)';
+  ctx.lineWidth   = active ? 2.5 : 1.5;
+  ctx.stroke();
+
+  // Wheel bg
+  ctx.beginPath();
+  ctx.arc(cx, cy, R, 0, Math.PI * 2);
+  ctx.fillStyle = '#0c0a28';
+  ctx.fill();
+
+  // Green zone
+  ctx.beginPath();
+  ctx.moveTo(cx, cy);
+  ctx.arc(cx, cy, R, gS, gE);
+  ctx.closePath();
+  ctx.fillStyle = good ? 'rgba(84,255,84,0.48)' : bad ? 'rgba(255,84,84,0.28)' : 'rgba(84,255,84,0.20)';
+  ctx.fill();
+
+  ctx.beginPath();
+  ctx.arc(cx, cy, R, gS, gE);
+  ctx.strokeStyle = good ? C.green : bad ? C.red : 'rgba(84,255,84,0.65)';
+  ctx.lineWidth   = 2.5;
+  ctx.stroke();
+
+  // Tick marks
+  for (let i = 0; i < 12; i++) {
+    const a = (i / 12) * Math.PI * 2;
+    const l = i % 3 === 0 ? 7 : 4;
+    ctx.beginPath();
+    ctx.moveTo(cx + Math.cos(a) * (R - l), cy + Math.sin(a) * (R - l));
+    ctx.lineTo(cx + Math.cos(a) * R,       cy + Math.sin(a) * R);
+    ctx.strokeStyle = 'rgba(84,255,255,0.30)';
+    ctx.lineWidth   = 1;
+    ctx.stroke();
+  }
+
+  if (!locked) {
+    // Speed trail
+    const spd = wheelSpd(angle);
+    for (let t = 1; t <= 5; t++) {
+      const ga  = angle - t * spd * 6;
+      const gmx = cx + Math.cos(ga) * R * 0.76;
+      const gmy = cy + Math.sin(ga) * R * 0.76;
+      ctx.beginPath();
+      ctx.arc(gmx, gmy, 3 * (1 - t * 0.17), 0, Math.PI * 2);
+      ctx.fillStyle = `rgba(255,255,255,${0.30 - t * 0.05})`;
+      ctx.fill();
+    }
+    // White dot
+    const mx = cx + Math.cos(angle) * R * 0.76;
+    const my = cy + Math.sin(angle) * R * 0.76;
+    ctx.beginPath();
+    ctx.arc(mx, my, 5, 0, Math.PI * 2);
+    ctx.fillStyle   = '#ffffff';
+    ctx.shadowColor = '#ffffff';
+    ctx.shadowBlur  = 10;
+    ctx.fill();
+    ctx.shadowBlur  = 0;
+  } else {
+    // Locked — frozen dot
+    const mx = cx + Math.cos(angle) * R * 0.76;
+    const my = cy + Math.sin(angle) * R * 0.76;
+    ctx.beginPath();
+    ctx.arc(mx, my, 5, 0, Math.PI * 2);
+    ctx.fillStyle   = good ? C.green : C.red;
+    ctx.shadowColor = good ? C.green : C.red;
+    ctx.shadowBlur  = 12;
+    ctx.fill();
+    ctx.shadowBlur  = 0;
+
+    ctx.fillStyle   = good ? C.green : C.red;
+    ctx.font        = `10px 'Press Start 2P'`;
+    ctx.textAlign   = 'center';
+    ctx.fillText(good ? 'OK' : 'X', cx, cy + 6);
+  }
+
+  // Label
+  ctx.fillStyle = active ? C.cyan : 'rgba(84,255,255,0.30)';
+  ctx.font      = `8px 'Press Start 2P'`;
+  ctx.textAlign = 'center';
+  ctx.fillText(label, cx, cy + R + 16);
+}
+
+function drawWheelDim(cx, cy, R, label) {
+  ctx.beginPath();
+  ctx.arc(cx, cy, R + 5, 0, Math.PI * 2);
+  ctx.fillStyle   = 'rgba(8,6,20,0.95)';
+  ctx.fill();
+  ctx.strokeStyle = 'rgba(84,255,255,0.18)';
+  ctx.lineWidth   = 1;
+  ctx.stroke();
+
+  ctx.beginPath();
+  ctx.arc(cx, cy, R, 0, Math.PI * 2);
+  ctx.fillStyle = '#070615';
+  ctx.fill();
+
+  ctx.fillStyle = 'rgba(84,255,255,0.22)';
+  ctx.font      = `8px 'Press Start 2P'`;
+  ctx.textAlign = 'center';
+  ctx.fillText(label, cx, cy + R + 16);
+}
+
+// ── FLASH ─────────────────────────────────────────────────
+function drawFlash(g) {
+  const { W, H } = g;
+  const cx = W/2, cy = H * 0.50;
+
+  ctx.fillStyle   = 'rgba(0,0,30,0.80)';
+  ctx.fillRect(cx - 138, cy - 18, 276, 32);
+  ctx.strokeStyle = flashColor;
+  ctx.lineWidth   = 2;
+  ctx.strokeRect(cx - 138, cy - 18, 276, 32);
+
+  ctx.fillStyle   = flashColor;
+  ctx.font        = `10px 'Press Start 2P'`;
+  ctx.textAlign   = 'center';
+  ctx.fillText(flashMsg, cx, cy + 5);
+}
+
+// ── INIT ──────────────────────────────────────────────────
+buildCrowd();
+draw();
+showStart();
+</script>
+</body>
+</html>
