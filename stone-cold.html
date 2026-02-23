@@ -131,7 +131,8 @@
 
   <div id="botbar">
     <div id="bot-date"></div>
-    <div id="pv-score" style="font-size:10px;color:#ffff54;letter-spacing:1px;">SCORE: 0</div>
+    <div id="bot-level" style="font-size:10px;color:#54ffff;letter-spacing:1px;">LEVEL 1/3</div>
+    <div id="pv-score" style="font-size:10px;color:#ffff54;letter-spacing:1px;">TOTAL: 0</div>
   </div>
 </div>
 
@@ -234,10 +235,25 @@ function generateSpectators() {
 }
 
 // ── STONE PLACEMENT (no overlap) ─────────────────────────
-function generateStones() {
-  const rand = seededRand(getDailySeed());
+// level 1 seed offset: 0, level 2: +1000, level 3: +2000
+// level 3 also adds a seeded guard stone in front of the house
+function generateStones(level) {
+  const seedOffset = (level - 1) * 1000;
+  const rand = seededRand(getDailySeed() + seedOffset);
   const placed = [];
   const minDist = S.sr*2.8;
+
+  // For level 3: place a guard stone first — red, seeded position
+  // Guard is between house bottom edge and partway to hog line, center third laterally
+  if(level === 3) {
+    const guardRand = seededRand(getDailySeed() + 3333);
+    const guardYmin = S.hy + S.r4 + S.sr*2;
+    const guardYmax = S.hy + S.r4 + (S.hogY - S.hy - S.r4) * 0.55;
+    const guardY = guardYmin + guardRand() * (guardYmax - guardYmin);
+    const thirdW = S.iceW / 3;
+    const guardX = (S.hx - thirdW * 0.5) + guardRand() * thirdW;
+    placed.push({x:guardX, y:guardY, vx:0, vy:0, spin:0, angle:guardRand()*Math.PI*2, col:COL_OPP, isGuard:true});
+  }
 
   function tryPlace(team, attempts) {
     for(let a=0;a<attempts;a++) {
@@ -253,7 +269,9 @@ function generateStones() {
     }
     return false;
   }
-  for(let i=0;i<4;i++) tryPlace('opp',80);
+  // Level 3 guard counts as 1 opp stone already, so place 3 more opp + 3 you
+  const oppCount = level === 3 ? 3 : 4;
+  for(let i=0;i<oppCount;i++) tryPlace('opp',80);
   for(let i=0;i<3;i++) tryPlace('you',80);
   return placed;
 }
@@ -271,6 +289,26 @@ const FRICTION_NORMAL  = 0.9963; // standard Olympic ice
 const FRICTION_SWEPT   = 0.9986; // swept ice — stone travels further, straighter
 const SWEEP_DURATION   = 250;    // ms of reduced friction per tap
 const SWEEP_SIDE_NUDGE = 0.006;  // tiny lateral nudge — fine tuning only
+
+// ── LEVEL STATE ────────────────────────────────────────────
+let currentLevel = 1;   // 1, 2, or 3
+let totalScore   = 0;   // accumulated across levels in current run
+
+// ── DAILY HIGH SCORE ───────────────────────────────────────
+function getDailyKey() {
+  const d = new Date();
+  return `stonecold_hi_${d.getFullYear()}${String(d.getMonth()+1).padStart(2,'0')}${String(d.getDate()).padStart(2,'0')}`;
+}
+function getDailyHigh() {
+  try { return parseInt(localStorage.getItem(getDailyKey())||'0',10); } catch(e){ return 0; }
+}
+function saveDailyHigh(score) {
+  try {
+    const key = getDailyKey();
+    const prev = getDailyHigh();
+    if(score > prev) localStorage.setItem(key, score);
+  } catch(e){}
+}
 
 // ── GAME LOOP ─────────────────────────────────────────────
 function gameLoop() {
@@ -383,7 +421,6 @@ function update() {
       playerStone=null;
     }
     // Remove stones knocked out of bounds
-    const before = stones.length;
     stones = stones.filter(s=>
       s.x>S.iceL-S.sr&&s.x<S.iceR+S.sr&&s.y>S.iceT-S.sr&&s.y<S.iceB+S.sr
     );
@@ -391,8 +428,14 @@ function update() {
     phase='result';
     const scoring=calcScore(stones);
     gameScore=calcFinalScore(scoring);
-    document.getElementById('pv-score').textContent='SCORE: '+gameScore;
-    setTimeout(()=>showResult(scoring),900);
+    totalScore += gameScore;
+    updateBottomBar();
+    if(currentLevel < 3){
+      setTimeout(()=>showInterLevel(scoring), 900);
+    } else {
+      saveDailyHigh(totalScore);
+      setTimeout(()=>showFinalResult(scoring), 900);
+    }
   }
 }
 
@@ -877,6 +920,11 @@ function updatePhaseBar(){
 // phase bar removed
 }
 
+function updateBottomBar(){
+  document.getElementById('bot-level').textContent = 'LEVEL '+currentLevel+'/3';
+  document.getElementById('pv-score').textContent = 'TOTAL: '+totalScore;
+}
+
 // ── INPUT ─────────────────────────────────────────────────
 function getCanvasPos(e){
   const rect=canvas.getBoundingClientRect();
@@ -969,12 +1017,28 @@ function onTapUp(e){
   updatePhaseBar();
 }
 
-// ── RESULT SCREEN ─────────────────────────────────────────
-function showResult(scoring){
+// ── HELPER: build score breakdown text ────────────────────
+function buildBreakdown(scoring){
+  const hs=handle==='in'?'IN-TURN':'OUT-TURN';
+  const hk=hack==='left'?'LEFT HACK':'RIGHT HACK';
+  if(scoring.youCount>0){
+    const avgPct=scoring.yourScoring.length?Math.round(scoring.totalDist/scoring.yourScoring.length/S.r4*100):0;
+    return `${hs} · ${hk}<br>STONES SCORING: ${scoring.youCount}<br>AVG FROM CENTER: ${avgPct}%`;
+  }
+  return `${hs} · ${hk}<br>OPPONENT STONE CLOSEST`;
+}
+
+// ── INTER-LEVEL SCREEN (after levels 1 & 2) ───────────────
+function showInterLevel(scoring){
   cancelAnimationFrame(animId);
   const ov=document.getElementById('overlay');
   ov.innerHTML=''; ov.style.display='flex';
   const won=scoring.youCount>0;
+  const nextLevel=currentLevel+1;
+
+  const lbl=document.createElement('div');
+  lbl.style.cssText='font-size:10px;color:#b8a8ff;letter-spacing:2px;margin-bottom:2px;';
+  lbl.textContent=`LEVEL ${currentLevel} OF 3`;
 
   const res=document.createElement('div'); res.id='ov-result';
   res.style.color=won?'#54ff54':'#ff5454';
@@ -982,29 +1046,83 @@ function showResult(scoring){
   res.textContent=won?'YOU SCORE!':'NO SCORE!';
 
   const bd=document.createElement('div'); bd.id='ov-breakdown';
-  const hs=handle==='in'?'IN-TURN':'OUT-TURN';
-  const hk=hack==='left'?'LEFT HACK':'RIGHT HACK';
-  if(won){
-    const avgPct=scoring.yourScoring.length?Math.round(scoring.totalDist/scoring.yourScoring.length/S.r4*100):0;
-    bd.innerHTML=`${hs} · ${hk}<br>STONES SCORING: ${scoring.youCount}<br>AVG FROM CENTER: ${avgPct}%`;
-  } else {
-    bd.innerHTML=`${hs} · ${hk}<br>OPPONENT STONE CLOSEST<br>TRY A DIFFERENT LINE`;
-  }
+  bd.innerHTML=buildBreakdown(scoring);
 
-  const sc=document.createElement('div'); sc.id='ov-score-big';
-  sc.textContent=`SCORE: ${gameScore}`;
+  const endScore=document.createElement('div');
+  endScore.style.cssText='font-size:13px;color:#54ffff;letter-spacing:2px;margin:4px 0 2px;';
+  endScore.textContent=`LEVEL SCORE: ${gameScore}`;
 
-  const tryBtn=document.createElement('button'); tryBtn.className='big-btn';
-  tryBtn.textContent='TRY AGAIN'; tryBtn.onclick=()=>initGame();
+  const totalEl=document.createElement('div'); totalEl.id='ov-score-big';
+  totalEl.textContent=`TOTAL: ${totalScore}`;
 
-  const diffBtn=document.createElement('button'); diffBtn.className='small-btn';
-  diffBtn.textContent='DIFFICULTY'; diffBtn.onclick=()=>showStart();
+  const interHi=document.createElement('div');
+  const dhi=getDailyHigh();
+  interHi.style.cssText='font-size:10px;color:#b8a8ff;letter-spacing:1px;';
+  interHi.textContent=dhi>0?`TODAY'S BEST: ${dhi}`:'NO SCORE YET TODAY';
+
+  const nextBtn=document.createElement('button'); nextBtn.className='big-btn';
+  nextBtn.textContent=`NEXT LEVEL ▶`; nextBtn.onclick=()=>advanceLevel();
+
+  const restartBtn=document.createElement('button'); restartBtn.className='small-btn';
+  restartBtn.textContent='↺ RESTART'; restartBtn.onclick=()=>initGame(true);
 
   const homeBtn=document.createElement('button'); homeBtn.className='small-btn';
   homeBtn.style.cssText='color:#ffff54;border-color:#ffff54';
   homeBtn.textContent='◀ HOME'; homeBtn.onclick=()=>window.location.href='index.html';
 
-  [res,bd,sc,tryBtn,diffBtn,homeBtn].forEach(el=>ov.appendChild(el));
+  [lbl,res,bd,endScore,totalEl,interHi,nextBtn,restartBtn,homeBtn].forEach(el=>ov.appendChild(el));
+}
+
+// ── FINAL RESULT SCREEN (after level 3) ───────────────────
+function showFinalResult(scoring){
+  cancelAnimationFrame(animId);
+  const ov=document.getElementById('overlay');
+  ov.innerHTML=''; ov.style.display='flex';
+  const won=scoring.youCount>0;
+  const dailyHigh=getDailyHigh();
+  const isNewHigh=totalScore>=dailyHigh;
+
+  const lbl=document.createElement('div');
+  lbl.style.cssText='font-size:10px;color:#b8a8ff;letter-spacing:2px;margin-bottom:2px;';
+  lbl.textContent='LEVEL 3 OF 3';
+
+  const res=document.createElement('div'); res.id='ov-result';
+  res.style.color=won?'#54ff54':'#ff5454';
+  res.style.textShadow='3px 3px 0 #4a3fa0';
+  res.textContent=won?'YOU SCORE!':'NO SCORE!';
+
+  const bd=document.createElement('div'); bd.id='ov-breakdown';
+  bd.innerHTML=buildBreakdown(scoring);
+
+  const endScore=document.createElement('div');
+  endScore.style.cssText='font-size:13px;color:#54ffff;letter-spacing:2px;margin:4px 0 2px;';
+  endScore.textContent=`LEVEL SCORE: ${gameScore}`;
+
+  const totalEl=document.createElement('div'); totalEl.id='ov-score-big';
+  totalEl.textContent=`TOTAL: ${totalScore}`;
+
+  if(isNewHigh){
+    const hiEl=document.createElement('div');
+    hiEl.style.cssText='font-size:10px;color:#ffff54;letter-spacing:2px;animation:blink 1s infinite;';
+    hiEl.textContent='★ NEW DAILY BEST! ★';
+    ov.appendChild(lbl); ov.appendChild(res); ov.appendChild(bd);
+    ov.appendChild(endScore); ov.appendChild(totalEl); ov.appendChild(hiEl);
+  } else {
+    const hiEl=document.createElement('div');
+    hiEl.style.cssText='font-size:10px;color:#b8a8ff;letter-spacing:1px;';
+    hiEl.textContent=`TODAY'S BEST: ${dailyHigh}`;
+    ov.appendChild(lbl); ov.appendChild(res); ov.appendChild(bd);
+    ov.appendChild(endScore); ov.appendChild(totalEl); ov.appendChild(hiEl);
+  }
+
+  const playBtn=document.createElement('button'); playBtn.className='big-btn';
+  playBtn.textContent='PLAY AGAIN'; playBtn.onclick=()=>initGame(true);
+
+  const homeBtn=document.createElement('button'); homeBtn.className='small-btn';
+  homeBtn.style.cssText='color:#ffff54;border-color:#ffff54';
+  homeBtn.textContent='◀ HOME'; homeBtn.onclick=()=>window.location.href='index.html';
+
+  ov.appendChild(playBtn); ov.appendChild(homeBtn);
 }
 
 // ── START SCREEN ──────────────────────────────────────────
@@ -1020,24 +1138,33 @@ function showStart(){
   rules.innerHTML=`<span>1</span> HANDLE &nbsp;<span>2</span> HACK &nbsp;<span>3</span> THROW<br>OUTSCORE THE <span>RED STONES</span><br>ALL 3 STEPS BEFORE YOU THROW`;
 
   const descEl=document.createElement('div'); descEl.id='ov-desc';
-  descEl.textContent='OLYMPIC ICE · FAST & HEAVY CURL';
-  const diffBtns=document.createElement('div');
+  descEl.textContent='OLYMPIC ICE · 3 ENDS · DAILY PUZZLE';
+
+  const hiEl=document.createElement('div');
+  const dh=getDailyHigh();
+  hiEl.style.cssText='font-size:10px;color:#ffff54;letter-spacing:1px;';
+  hiEl.textContent=dh>0?`TODAY'S BEST: ${dh}`:'NO SCORE YET TODAY';
 
   const startBtn=document.createElement('button'); startBtn.className='big-btn';
-  startBtn.textContent='PLAY!'; startBtn.onclick=()=>initGame();
+  startBtn.textContent='PLAY!'; startBtn.onclick=()=>initGame(true);
 
   const homeBtn=document.createElement('button'); homeBtn.className='small-btn';
   homeBtn.style.cssText='color:#ffff54;border-color:#ffff54';
   homeBtn.textContent='◀ HOME'; homeBtn.onclick=()=>window.location.href='index.html';
 
-  [title,sub,rules,descEl,startBtn,homeBtn].forEach(el=>ov.appendChild(el));
-  resize(); buildSheet(); stones=generateStones(); generateSpectators(); draw();
+  [title,sub,rules,descEl,hiEl,startBtn,homeBtn].forEach(el=>ov.appendChild(el));
+  resize(); buildSheet(); stones=generateStones(1); generateSpectators(); draw();
 }
 
 // ── INIT ──────────────────────────────────────────────────
-function initGame(){
+// resetAll=true resets to level 1 with zero total; false advances within run
+function initGame(resetAll){
   resize(); buildSheet();
-  stones=generateStones(); generateSpectators();
+  if(resetAll || resetAll===undefined){
+    currentLevel=1;
+    totalScore=0;
+  }
+  stones=generateStones(currentLevel); generateSpectators();
   playerStone=null; phase='handle';
   handle=null; hack=null;
   dragStart=null; dragCurrent=null;
@@ -1045,10 +1172,16 @@ function initGame(){
   sweepLeft=false; sweepFwd=false; sweepRight=false;
   sweepActiveUntil=0;
   document.getElementById('overlay').style.display='none';
-  document.getElementById('pv-score').textContent='SCORE: 0';
+  updateBottomBar();
   updatePhaseBar();
   cancelAnimationFrame(animId);
   gameLoop();
+}
+
+// ── ADVANCE TO NEXT LEVEL ─────────────────────────────────
+function advanceLevel(){
+  currentLevel++;
+  initGame(false);
 }
 
 // ── BOOT ──────────────────────────────────────────────────
