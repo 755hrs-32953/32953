@@ -265,6 +265,8 @@ let crowd = [];
 let frameCount = 0;
 let animId = null;
 let flashMsg = null, flashColor = C.yellow, flashUntil = 0;
+let lastFrameTime = 0;
+let deltaTime = 16.67;
 
 // ── CROWD ─────────────────────────────────────────────────
 const PARKAS = ['#ff5454','#54ffff','#54ff54','#ffff54','#ff88ff','#ffffff','#ff8800','#aa54ff','#3568b4'];
