@@ -263,7 +263,7 @@ const GAMES = [
   {name:'STONE\nCOLD',    loc:'CALGARY, CANADA', url:'stone-cold.html',   active:true,  score:0, iconFn:'iconCurling'},
   {name:'FAIR\nWAY',      loc:'PEBBLE BEACH',    url:'fairway.html',      active:true,  score:0, iconFn:'iconGolf'},
   {name:'DOWN\nTOWN',     loc:'32953 ARENA',     url:'downtown.html',     active:true,  score:0, iconFn:'iconBasketball'},
-  {name:'TANK\nBATTLE',   loc:'UKRAINE',         url:'#',                 active:false, score:0, iconFn:'iconTank'},
+  {name:'SPLASH',      loc:'OLYMPIC POOL',    url:'splash.html',       active:true,  score:0, iconFn:'iconSwim'},
   {name:'ASTEROID\nRUN',  loc:'DEEP SPACE',      url:'#',                 active:false, score:0, iconFn:'iconAsteroid'},
   {name:'JUNGLE\nRUN',    loc:'AMAZON',          url:'#',                 active:false, score:0, iconFn:'iconJungle'},
   {name:'DOGFIGHT',       loc:'ENGLISH CH.',     url:'#',                 active:false, score:0, iconFn:'iconPlane'},
@@ -539,6 +539,54 @@ function iconDiver(ctx, s) {
 }
 
 
+function iconSwim(ctx, s) {
+  const u = s/16;
+  // Pool water background
+  px(ctx,'#072e6e', 0,0,16*u,16*u);
+  px(ctx,'#0a4090', 2*u,0,12*u,16*u);
+  // Lane rope dots
+  px(ctx,'rgba(255,70,70,0.7)',  4*u,u,u,u);
+  px(ctx,'rgba(255,70,70,0.7)',  4*u,4*u,u,u);
+  px(ctx,'rgba(255,70,70,0.7)',  4*u,7*u,u,u);
+  px(ctx,'rgba(255,70,70,0.7)',  4*u,10*u,u,u);
+  px(ctx,'rgba(255,70,70,0.7)',  4*u,13*u,u,u);
+  px(ctx,'rgba(255,230,60,0.6)', 11*u,2*u,u,u);
+  px(ctx,'rgba(255,230,60,0.6)', 11*u,5*u,u,u);
+  px(ctx,'rgba(255,230,60,0.6)', 11*u,8*u,u,u);
+  px(ctx,'rgba(255,230,60,0.6)', 11*u,11*u,u,u);
+  px(ctx,'rgba(255,230,60,0.6)', 11*u,14*u,u,u);
+  // Shimmer
+  px(ctx,'rgba(100,180,255,0.18)', 7*u,0,u,16*u);
+  // === SWIMMER (top-down, heading up) ===
+  // Arms outstretched (frame A pose)
+  px(ctx,'#dba876', u,5*u,2*u,u);    // left arm
+  px(ctx,'#dba876', 13*u,5*u,2*u,u); // right arm
+  // Body / suit — yellow (player color)
+  px(ctx,'#887700', 6*u,6*u,4*u,6*u);
+  px(ctx,'#ffff54', 6*u,5*u,4*u,u);  // suit stripe
+  // Legs
+  px(ctx,'#887700', 6*u,12*u,u,2*u);
+  px(ctx,'#887700', 9*u,12*u,u,2*u);
+  // Feet kick
+  px(ctx,'#dba876', 6*u,14*u,u,u);
+  px(ctx,'#dba876', 9*u,14*u,u,u);
+  // === CAP — yellow, top-down oval ===
+  px(ctx,'#ffff54', 6*u,2*u,4*u,u);
+  px(ctx,'#ffff54', 5*u,3*u,6*u,u);
+  px(ctx,'#ffff54', 5*u,4*u,6*u,u);
+  px(ctx,'#ffff54', 6*u,5*u,4*u,u);
+  // === GOGGLES — cyan stripe across cap ===
+  px(ctx,'#54ffff', 5*u,3*u,2*u,u);
+  px(ctx,'#54ffff', 9*u,3*u,2*u,u);
+  px(ctx,'#00dddd', 7*u,3*u,2*u,u);  // nose bridge
+  // Cap highlight
+  px(ctx,'rgba(255,255,200,0.5)', 7*u,2*u,2*u,u);
+  // Water ripple behind swimmer
+  px(ctx,'rgba(140,210,255,0.35)', 5*u,9*u,u,u);
+  px(ctx,'rgba(140,210,255,0.35)', 10*u,9*u,u,u);
+}
+
+
 function iconCurling(ctx, s) {
   const u = s/16;
   // Ice sheet
@@ -672,7 +720,7 @@ function iconBasketball(ctx, s) {
 
 const ICON_FNS = {
   iconLunarLander, iconCurling, iconGolf, iconCar, iconSub, iconSki, iconTank,
-  iconAsteroid, iconJungle, iconPlane, iconGold, iconDiver, iconBasketball
+  iconAsteroid, iconJungle, iconPlane, iconGold, iconDiver, iconBasketball, iconSwim
 };
 
 // Build icon canvas

@@ -1,0 +1,1022 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
+<title>32953 — SPLASH</title>
+<style>
+  @import url('https://fonts.googleapis.com/css2?family=Press+Start+2P&display=swap');
+  :root {
+    --c64-purple: #7b68ee;
+    --c64-dark:   #4a3fa0;
+    --c64-yellow: #ffff54;
+    --c64-cyan:   #54ffff;
+  }
+  * { margin:0; padding:0; box-sizing:border-box; }
+  html, body {
+    width:100%; height:100%; background:#000;
+    display:flex; align-items:center; justify-content:center;
+    overflow:hidden; font-family:'Press Start 2P', monospace;
+    position:fixed; top:0; left:0; right:0; bottom:0;
+  }
+  #app {
+    width:380px; background:#1a1a40;
+    display:flex; flex-direction:column;
+    position:relative; overflow:hidden;
+    border:3px solid var(--c64-dark);
+    box-shadow:0 0 40px #7b68ee44;
+  }
+  #header {
+    background:var(--c64-purple); border-bottom:4px solid var(--c64-dark);
+    padding:6px 12px; display:flex; align-items:center; justify-content:space-between; flex-shrink:0;
+  }
+  #logo       { font-size:13px; color:#fff; letter-spacing:3px; text-shadow:2px 2px 0 var(--c64-dark); }
+  #game-label { font-size:10px; color:#d4c0ff; letter-spacing:2px; }
+  #game-wrap  { flex:1; position:relative; overflow:hidden; min-height:0; }
+  canvas      { display:block; width:100%; height:100%; image-rendering:pixelated; }
+  #overlay {
+    position:absolute; inset:0; background:rgba(0,0,40,0.94);
+    display:flex; flex-direction:column; align-items:center; justify-content:center;
+    z-index:20; padding:16px; gap:8px;
+  }
+  #ov-title { font-size:22px; color:#fff; letter-spacing:4px; text-align:center; text-shadow:3px 3px 0 var(--c64-dark); line-height:1.8; margin-bottom:4px; }
+  #ov-sub   { font-size:10px; color:#b8a8ff; letter-spacing:2px; margin-bottom:8px; }
+  .ov-rule  { font-size:10px; color:var(--c64-cyan); letter-spacing:1px; text-align:center; line-height:2.4; }
+  .ov-rule span { color:var(--c64-yellow); }
+  .big-btn {
+    font-family:'Press Start 2P',monospace; font-size:11px; padding:11px 28px;
+    background:var(--c64-yellow); color:#000; border:3px solid #fff;
+    cursor:pointer; letter-spacing:2px; box-shadow:4px 4px 0 var(--c64-dark); margin-top:8px;
+  }
+  .big-btn:active { transform:translate(2px,2px); box-shadow:2px 2px 0 var(--c64-dark); }
+  .small-btn {
+    font-family:'Press Start 2P',monospace; font-size:10px; padding:8px 14px;
+    background:transparent; color:var(--c64-cyan); border:2px solid var(--c64-cyan);
+    cursor:pointer; letter-spacing:1px;
+  }
+  .small-btn:active { background:var(--c64-cyan); color:#000; }
+  #ov-result    { font-size:18px; letter-spacing:3px; text-align:center; margin-bottom:3px; }
+  #ov-breakdown { font-size:10px; color:var(--c64-cyan); text-align:center; line-height:2.4; letter-spacing:1px; margin-bottom:6px; }
+  #botbar {
+    background:var(--c64-purple); border-top:4px solid var(--c64-dark);
+    padding:4px 10px; display:flex; justify-content:space-between; align-items:center; flex-shrink:0;
+  }
+  .bot-item { font-size:10px; color:#d4c0ff; letter-spacing:1px; }
+  .bot-val  { color:var(--c64-yellow); }
+</style>
+</head>
+<body>
+<div id="app">
+  <div id="header">
+    <div id="logo">32953</div>
+    <div id="game-label">SPLASH</div>
+  </div>
+  <div id="game-wrap">
+    <canvas id="c"></canvas>
+    <div id="overlay"></div>
+  </div>
+  <div id="botbar">
+    <div class="bot-item">PLACE: <span class="bot-val" id="bot-place-val">—</span></div>
+    <div class="bot-item">LAP: <span class="bot-val" id="bot-lap-val">1/2</span></div>
+    <div class="bot-item">TIME: <span class="bot-val" id="bot-time-val">0.00</span></div>
+  </div>
+</div>
+
+<script>
+// ── CANVAS ─────────────────────────────────────────────────
+const canvas = document.getElementById('c');
+const ctx    = canvas.getContext('2d');
+const wrap   = document.getElementById('game-wrap');
+
+function fixHeight() {
+  const app = document.getElementById('app');
+  app.style.height = app.style.maxHeight = window.innerHeight + 'px';
+}
+fixHeight();
+window.addEventListener('resize', () => { fixHeight(); resize(); });
+window.addEventListener('orientationchange', () => setTimeout(fixHeight, 200));
+function resize() { canvas.width = wrap.clientWidth; canvas.height = wrap.clientHeight; }
+resize();
+
+// ── PALETTE ────────────────────────────────────────────────
+const C = {
+  yellow:'#ffff54', green:'#54ff54', red:'#ff5454',
+  cyan:'#54ffff', orange:'#ff8800',
+};
+
+// ── CONSTANTS ──────────────────────────────────────────────
+const NUM_LANES   = 5;
+const POOL_LENGTH = 2000;   // progress units total (0→1000 lap1, 1000→2000 lap2)
+const TURN_PROG   = 1000;
+const PLAYER_IDX  = 2;      // middle lane
+
+// Swimmer profiles
+const SWIM_COLS = [
+  { cap:'#ff5454', suit:'#770000', name:'RUSSO'  },
+  { cap:'#ff8800', suit:'#773300', name:'TANAKA' },
+  { cap:'#ffff54', suit:'#887700', name:'YOU'    },
+  { cap:'#54ff54', suit:'#006622', name:'PARK'   },
+  { cap:'#54ffff', suit:'#004466', name:'MÜLLER' },
+];
+// AI finish times target: ~52.5s to ~56s — player wins gold with good taps (~51.71s perfect)
+// speed (prog/frame) = 2000 / (targetSeconds * 60)
+const AI_BASE   = [0.631, 0.610, 0,     0.620, 0.592];  // ≈52.8s, 54.6s, -, 53.8s, 56.4s
+const AI_WOBBLE = [0.018, 0.014, 0,     0.016, 0.012];  // small wobble only
+
+// ── STATE ──────────────────────────────────────────────────
+let gameRunning = false, gameOver = false;
+let raceTime = 0, lastFrameTime = 0, deltaTime = 16.67;
+let animId = null, frameCount = 0;
+let swimmers = [];
+
+// Bar — 2 taps/second = one half-cycle per 0.5s = ~30 frames per half
+// BAR_SPEED = 1/30 ≈ 0.0333 per frame
+// avg speed needed = 2000/(51.71*60) ≈ 0.645 prog/frame
+// with 2 taps/sec: MAX_SPD - (DECAY * 15) = avg → need DECAY small enough
+// DECAY = 0.004/frame → loses 0.004*30 = 0.12 per stroke, avg ≈ MAX_SPD - 0.06
+// MAX_SPD = 0.645 + 0.06 ≈ 0.705
+let barDash = 0.5, barDir = 1;
+const BAR_SPEED  = 0.0333;  // ~2 taps/second (30 frames per half-cycle)
+let strokePower  = 0, playerSpeed = 0;
+const MAX_SPD    = 0.730;   // perfect tap → ~51.71s
+const MIN_SPD    = 0.10;    // coast floor
+const SPD_DECAY  = 0.004;   // gentle decay per dt-frame
+
+// Arm cycle synced to bar
+let armCycle = 0.5;
+
+// Countdown / dive
+let countdownPhase = false, countdownVal = 3, countdownTimer = 0;
+let diveDone = false;
+
+// Particles
+let splashes = [], ripples = [];
+
+// Flash
+let flashMsg = null, flashColor = C.yellow, flashUntil = 0;
+
+// ── GEOMETRY ───────────────────────────────────────────────
+function getG() {
+  const W = canvas.width, H = canvas.height;
+  const poolL = W * 0.10;
+  const poolR = W * 0.90;
+  const poolW = poolR - poolL;
+  const laneW = poolW / NUM_LANES;
+  // Timing bar at bottom
+  const barPad = W * 0.08;
+  const barX   = barPad;
+  const barW   = W - barPad * 2;
+  const barH   = 18;
+  const barY   = H * 0.60;
+  return { W, H, poolL, poolR, poolW, laneW, barX, barW, barH, barY };
+}
+
+// ── INIT ───────────────────────────────────────────────────
+function initSwimmers() {
+  swimmers = SWIM_COLS.map((col, i) => ({
+    progress: 0, col, lane: i,
+    finished: false, finishTime: 0,
+    wobblePhase: Math.random() * Math.PI * 2,
+    isPlayer: i === PLAYER_IDX,
+    diveProgress: 0, diving: false, splashDone: false,
+  }));
+}
+
+// ── OVERLAY ────────────────────────────────────────────────
+function showOverlay(html) {
+  const ov = document.getElementById('overlay');
+  ov.innerHTML = html; ov.style.display = 'flex';
+}
+function hideOverlay() { document.getElementById('overlay').style.display = 'none'; }
+
+function showStart() {
+  showOverlay(`
+    <div id="ov-title">SPLASH</div>
+    <div id="ov-sub">32953.COM · OLYMPIC 100M FREE</div>
+    <div class="ov-rule">
+      tap <span>ANYWHERE</span> to stroke<br>
+      time your tap when the dash hits<br>
+      the <span>GREEN ZONES</span> at each end<br>
+      perfect timing = <span>FULL POWER</span><br>
+      miss = weak stroke<br>&nbsp;<br>
+      <span>2 LAPS</span> · 5 swimmers · lane 3 = YOU<br>
+      WR pace = <span>51.71s</span> · beat the field for <span>GOLD</span>
+    </div>
+    <button class="big-btn" onclick="startGame()">DIVE IN!</button>
+  `);
+}
+
+// ── START ──────────────────────────────────────────────────
+function startGame() {
+  hideOverlay(); stopLoop(); initSwimmers();
+  barDash = 0.0; barDir = 1; strokePower = 0;
+  playerSpeed = 0; armCycle = 0.5; raceTime = 0;
+  lastFrameTime = 0; frameCount = 0;
+  splashes = []; ripples = []; flashMsg = null;
+  gameOver = false; gameRunning = false; diveDone = false;
+  countdownPhase = true; countdownVal = 3; countdownTimer = 0;
+  animId = requestAnimationFrame(loop);
+}
+
+function loop(ts) {
+  animId = requestAnimationFrame(loop);
+  if (lastFrameTime) deltaTime = Math.min(ts - lastFrameTime, 50);
+  lastFrameTime = ts; frameCount++;
+  update(); draw();
+}
+function stopLoop() { if (animId) { cancelAnimationFrame(animId); animId = null; } }
+
+// ── UPDATE ─────────────────────────────────────────────────
+function update() {
+  const dt = deltaTime / 16.67;
+
+  if (countdownPhase) {
+    countdownTimer += deltaTime;
+    if (countdownTimer > 900) {
+      countdownTimer = 0; countdownVal--;
+      if (countdownVal <= 0) {
+        countdownPhase = false;
+        swimmers.forEach(sw => { sw.diving = true; sw.diveProgress = 0; });
+      }
+    }
+    return;
+  }
+
+  if (!diveDone) {
+    if (!swimmers.some(sw => sw.diving)) return;
+    let allIn = true;
+    swimmers.forEach(sw => {
+      if (!sw.diving) { allIn = false; return; }
+      if (sw.diveProgress < 1) {
+        sw.diveProgress = Math.min(1, sw.diveProgress + 0.045 * dt);
+        if (sw.diveProgress < 1) allIn = false;
+        if (sw.diveProgress > 0.5 && !sw.splashDone) {
+          sw.splashDone = true; spawnSplash(sw.lane, 0);
+        }
+      }
+    });
+    if (allIn) { diveDone = true; gameRunning = true; }
+    return;
+  }
+
+  if (!gameRunning || gameOver) return;
+
+  raceTime += deltaTime / 1000;
+
+  // Bar bounce — fully time-normalized via dt
+  barDash += barDir * BAR_SPEED * dt;
+  if (barDash >= 1) { barDash = 1; barDir = -1; }
+  if (barDash <= 0) { barDash = 0; barDir  =  1; }
+  armCycle = barDash;
+
+  // Player speed decay — per dt, not per frame
+  playerSpeed = Math.max(MIN_SPD * 0.25, playerSpeed - SPD_DECAY * dt);
+  // Power meter decays with speed so it clears when player stops tapping
+  strokePower = (playerSpeed - MIN_SPD * 0.25) / (MAX_SPD - MIN_SPD * 0.25);
+  strokePower = Math.max(0, Math.min(1, strokePower));
+
+  // AI swimmers — time-based ripples, no frameCount dependency
+  swimmers.forEach((sw, i) => {
+    if (sw.isPlayer || sw.finished) return;
+    const spd = AI_BASE[i] + Math.sin(raceTime * 3.0 + sw.wobblePhase) * AI_WOBBLE[i];
+    sw.progress += spd * dt;
+    sw.rippleTimer = (sw.rippleTimer || 0) + deltaTime;
+    if (sw.rippleTimer > 350) { sw.rippleTimer = 0; spawnRipple(i, sw.progress); }
+    if (sw.progress >= swimmerFinishStop()) {
+      sw.finished = true; sw.finishTime = raceTime;
+      sw.progress = swimmerFinishStop();
+    }
+  });
+
+  // Player — time-based ripples
+  const player = swimmers[PLAYER_IDX];
+  if (!player.finished) {
+    player.progress += playerSpeed * dt;
+    player.rippleTimer = (player.rippleTimer || 0) + deltaTime;
+    if (player.rippleTimer > 200) { player.rippleTimer = 0; spawnRipple(PLAYER_IDX, player.progress); }
+    // Stop when head reaches the finish wall (clamp prevents any overshoot)
+    if (player.progress >= swimmerFinishStop()) {
+      player.finished = true;
+      player.finishTime = raceTime;
+      player.progress = swimmerFinishStop();
+      playerSpeed = 0;
+    }
+  }
+
+  splashes = splashes.filter(s => { s.life -= 0.045 * dt; return s.life > 0; });
+  ripples  = ripples.filter(r  => { r.life -= 0.028 * dt; return r.life > 0; });
+
+  const allDone = swimmers.every(sw => sw.finished);
+  const timeOut = player.finished && (raceTime - player.finishTime > 12);
+  if ((allDone || timeOut) && !gameOver) { gameOver = true; setTimeout(showResult, 700); }
+
+  if (flashMsg && Date.now() > flashUntil) flashMsg = null;
+  updateBot();
+}
+
+// ── TAP — single tap anywhere ──────────────────────────────
+function handleTap(e) {
+  e.preventDefault();
+  if (countdownPhase || !diveDone || !gameRunning || gameOver) return;
+
+  // Nearest endpoint: left (0) if dash is in left half, right (1) if in right half
+  const target = barDash < 0.5 ? 0 : 1;
+  const dist   = Math.abs(barDash - target);
+
+  let power, msg, col;
+  if      (dist < 0.055) { power = 1.00; msg = 'PERFECT!'; col = C.yellow; }
+  else if (dist < 0.14)  { power = 0.78; msg = 'GOOD';     col = C.green;  }
+  else if (dist < 0.27)  { power = 0.50; msg = 'OK';       col = C.cyan;   }
+  else                   { power = 0.20; msg = 'WEAK';      col = C.red;    }
+
+  strokePower = power;
+  playerSpeed = MIN_SPD + (MAX_SPD - MIN_SPD) * power;
+  flashMsg = msg; flashColor = col; flashUntil = Date.now() + 500;
+  spawnRipple(PLAYER_IDX, swimmers[PLAYER_IDX].progress);
+  spawnSplash(PLAYER_IDX, swimmers[PLAYER_IDX].progress);
+}
+
+canvas.addEventListener('pointerdown', handleTap);
+canvas.addEventListener('touchstart', e => e.preventDefault(), { passive: false });
+
+// ── PARTICLES ──────────────────────────────────────────────
+function spawnSplash(lane, progress) {
+  for (let i = 0; i < 7; i++) splashes.push({
+    lane, progress,
+    dx: (Math.random()-0.5)*10, dy: (Math.random()-0.5)*10,
+    life: 0.7 + Math.random()*0.5, r: 1.5 + Math.random()*2.5,
+  });
+}
+function spawnRipple(lane, progress) { ripples.push({ lane, progress, life: 1.0 }); }
+
+// ── COORDINATE HELPERS ─────────────────────────────────────
+// absY(progress): absolute pool position along the Y axis.
+//   Lap 1 (0→1000): swimmer moves UP → absY increases 0→1000
+//   Lap 2 (1000→2000): swimmer moves DOWN → absY decreases 1000→0
+// Player is always drawn at midY. Other swimmers offset from player's absY.
+// Positive screen offset = lower on screen (larger canvas y).
+
+function absY(progress) {
+  return progress <= TURN_PROG ? progress : (2 * TURN_PROG - progress);
+}
+
+function progressToScreenY(progress, playerProgress, g) {
+  const midY  = g.H * 0.42;
+  // Zoom in: show ~300 progress units worth of pool on screen at once
+  // (300 units ≈ ~8s of racing — enough to see the whole field spread out)
+  // At peak speed ~0.63 prog/frame × 60fps = 37.8 prog/s → 300 units ≈ 8s visible range
+  const scale = g.H / 300;
+  return midY - (absY(progress) - absY(playerProgress)) * scale;
+}
+
+function laneToScreenX(lane, g) {
+  return g.poolL + (lane + 0.5) * g.laneW;
+}
+
+// Finish stop: swimmer center stops this many progress-units BEFORE POOL_LENGTH
+// so that the leading arm tip lands on the wall line.
+// We measure this in pixels directly:
+//   - sprite is 20 rows tall, centered at cy
+//   - leading arm tip (row 0) is totalH/2 pixels from center TOWARD the wall
+//   - the wall line is 3px thick; we want the arm tip on the near edge
+//   - so center must be (totalH/2) px away from wall in screen space
+//   - in progress units: offset = pixelDistance / (H/300)
+// BUT: on lap2 the swimmer faces DOWN (scale 1,-1 flips it), so the arm
+// that was "top of sprite" is now rendered at cy + totalH/2 on screen.
+// The finish wall screen Y = progressToScreenY(POOL_LENGTH, playerProgress)
+// approaches midY from below as player nears finish.
+// We want: cy + totalH/2 = wallY  →  cy = wallY - totalH/2
+// cy = progressToScreenY(stopProgress, playerProgress)
+// wallY = progressToScreenY(POOL_LENGTH, playerProgress)
+// wallY - cy = (absY(stopProgress) - absY(POOL_LENGTH)) * scale
+//            = (absY(stopProgress) - 0) * scale
+// absY(stopProgress) = (wallY - cy) / scale = (totalH/2) / scale
+// absY(stopProgress) = 2000 - stopProgress  →  stopProgress = 2000 - totalH/2/scale
+// So offset from POOL_LENGTH = totalH/2 / scale  ✓
+//
+// The problem was we kept second-guessing this. Let's just use it directly.
+function swimmerFinishStop() {
+  const g = getG();
+  const ps = Math.max(2, Math.floor(g.laneW * 0.85 / 10));
+  const totalH = 20 * ps;
+  const scale = g.H / 300;
+  return POOL_LENGTH - (totalH * 0.75) / scale;
+}
+
+
+function getPlayerPlace() {
+  return [...swimmers].sort((a,b)=>b.progress-a.progress).findIndex(sw=>sw.isPlayer)+1;
+}
+function updateBot() {
+  const p = swimmers[PLAYER_IDX];
+  const ps = ['1ST','2ND','3RD','4TH','5TH'][getPlayerPlace()-1];
+  document.getElementById('bot-place-val').textContent = ps||'—';
+  document.getElementById('bot-lap-val').textContent   = p.progress < TURN_PROG ? '1/2' : '2/2';
+  document.getElementById('bot-time-val').textContent  = raceTime.toFixed(2);
+}
+
+// ── RESULT ─────────────────────────────────────────────────
+function showResult() {
+  stopLoop();
+  const sorted = [...swimmers].sort((a,b)=>{
+    if (a.finished&&b.finished) return a.finishTime-b.finishTime;
+    if (a.finished) return -1; if (b.finished) return 1;
+    return b.progress-a.progress;
+  });
+  const rank   = sorted.findIndex(sw=>sw.isPlayer)+1;
+  const player = swimmers[PLAYER_IDX];
+  const t = player.finishTime>0 ? player.finishTime.toFixed(2) : '—';
+  const medals  = ['GOLD MEDAL!','SILVER MEDAL','BRONZE MEDAL','NO MEDAL','NO MEDAL'];
+  const mcols   = [C.yellow,'#c0c0ff',C.orange,C.red,C.red];
+  const pstrs   = ['1ST','2ND','3RD','4TH','5TH'];
+
+  // World record callout
+  const WR = 51.71;
+  let medalLabel = medals[rank-1];
+  let medalColor = mcols[rank-1];
+  if (player.finishTime > 0 && player.finishTime <= WR) {
+    medalLabel = 'WORLD RECORD!';
+    medalColor = C.yellow;
+  }
+  const rows    = sorted.map((sw,i)=>{
+    const ft = sw.finishTime>0 ? sw.finishTime.toFixed(2)+'s' : '--';
+    return `${sw.isPlayer?'▶ ':'  '}${pstrs[i]} ${sw.col.name.padEnd(6)} ${ft}`;
+  }).join('<br>');
+  showOverlay(`
+    <div id="ov-result" style="color:${medalColor};text-shadow:2px 2px 0 #4a3fa0">${medalLabel}</div>
+    <div id="ov-breakdown">YOUR PLACE: ${pstrs[rank-1]}<br>YOUR TIME: ${t}s<br>WR: 51.71s<br>&nbsp;<br>${rows}</div>
+    <button class="big-btn" onclick="startGame()">RACE AGAIN</button>
+    <button class="small-btn" onclick="window.location.href='index.html'">&#9664; HOME</button>
+  `);
+}
+
+// ── DRAW ───────────────────────────────────────────────────
+function draw() {
+  const g = getG();
+  ctx.clearRect(0, 0, g.W, g.H);
+  drawDeck(g);
+  drawBleachers(g);
+  drawPool(g);
+
+  // Clip swim-zone rendering to pool water bounds
+  const player = swimmers[PLAYER_IDX];
+  if (player && diveDone) {
+    const sY = progressToScreenY(0,         player.progress, g);
+    const tY = progressToScreenY(TURN_PROG, player.progress, g);
+    const clipTop = Math.max(0, Math.min(sY, tY));
+    const clipBot = Math.min(g.H, Math.max(sY, tY));
+    ctx.save();
+    ctx.beginPath();
+    ctx.rect(g.poolL, clipTop, g.poolW, clipBot - clipTop);
+    ctx.clip();
+    drawRipples(g);
+    drawSwimmers(g);
+    drawSplashes(g);
+    ctx.restore();
+  } else {
+    drawRipples(g);
+    drawSwimmers(g);
+    drawSplashes(g);
+  }
+
+  drawWalls(g);
+  drawLaneNames(g);
+  if (diveDone && gameRunning && !gameOver) drawTimingBar(g);
+  if (countdownPhase || (!diveDone && swimmers.some(sw=>sw.diving))) drawCountdown(g);
+  if (flashMsg) drawFlash(g);
+}
+
+// ── DECK (side margins only) ────────────────────────────────
+function drawDeck(g) {
+  ctx.fillStyle = '#8a7858';
+  ctx.fillRect(0, 0, g.W, g.H);
+  ctx.strokeStyle = 'rgba(0,0,0,0.10)'; ctx.lineWidth = 1;
+  for (let x=0; x<g.W; x+=16) { ctx.beginPath(); ctx.moveTo(x,0); ctx.lineTo(x,g.H); ctx.stroke(); }
+  for (let y=0; y<g.H; y+=16) { ctx.beginPath(); ctx.moveTo(0,y); ctx.lineTo(g.W,y); ctx.stroke(); }
+}
+
+// ── BLEACHERS ──────────────────────────────────────────────
+// Fan colors — retro C64-ish palette
+const FAN_COLS = [
+  '#ff5454','#ff8800','#ffff54','#54ff54','#54ffff',
+  '#b854ff','#ff54b8','#ffffff','#ff2222','#00aaff',
+  '#aaffaa','#ffaa00','#cc44cc','#44ccff','#ffccaa',
+];
+
+// Deterministic "random" from seed so fans don't flicker each frame
+function seededRand(seed) {
+  const x = Math.sin(seed + 1) * 43758.5453123;
+  return x - Math.floor(x);
+}
+
+function drawBleachersRegion(g, regionY, regionH) {
+  if (regionH <= 0) return;
+  const { W } = g;
+
+  // Fan size — head should roughly match swimmer head scale (~6-8px)
+  const headSz = 7;   // head square size in px
+  const bodyW  = 9;   // body width
+  const bodyH  = 8;   // body height
+  const armW   = 3;
+  const seatW  = 18;  // horizontal spacing between fan centres
+  const rowH   = 22;  // vertical spacing between rows
+
+  const numRows = Math.ceil(regionH / rowH) + 1;
+  const numCols = Math.floor(W / seatW) + 1;
+
+  const skinTones = ['#dba876','#c8843a','#f5c89a','#8a5030','#e8b080'];
+
+  ctx.save();
+  ctx.beginPath();
+  ctx.rect(0, regionY, W, regionH);
+  ctx.clip();
+
+  for (let row = 0; row < numRows; row++) {
+    const rowY = regionY + row * rowH;
+
+    // Bleacher bench — dark stepped background
+    ctx.fillStyle = row % 2 === 0 ? '#2a1e10' : '#221a0e';
+    ctx.fillRect(0, rowY, W, rowH);
+    // Row step shadow
+    ctx.fillStyle = 'rgba(0,0,0,0.35)';
+    ctx.fillRect(0, rowY, W, 2);
+    // Seat base (concrete ledge)
+    ctx.fillStyle = '#4a3820';
+    ctx.fillRect(0, rowY + rowH - 4, W, 4);
+
+    // Fans in this row — offset odd rows by half a seat for staggered look
+    const offsetX = (row % 2) * (seatW * 0.5);
+
+    for (let col = 0; col < numCols; col++) {
+      const cx = offsetX + col * seatW + seatW * 0.5;
+      const seed = row * 500 + col;
+
+      // ~20% empty seats
+      if (seededRand(seed * 7.3) < 0.20) continue;
+
+      // Fan shirt color
+      const colIdx = Math.floor(seededRand(seed * 2.1) * FAN_COLS.length);
+      const bodyCol = FAN_COLS[colIdx];
+      const skinCol = skinTones[Math.floor(seededRand(seed * 3.7) * skinTones.length)];
+
+      // Bottom of fan sits on the bench ledge
+      const baseY = rowY + rowH - 4;
+
+      // Body
+      ctx.fillStyle = bodyCol;
+      ctx.fillRect(cx - bodyW/2, baseY - bodyH, bodyW, bodyH);
+
+      // Head
+      ctx.fillStyle = skinCol;
+      ctx.fillRect(cx - headSz/2, baseY - bodyH - headSz, headSz, headSz);
+
+      // Raised arm left (~20% chance)
+      if (seededRand(seed * 5.9) < 0.20) {
+        ctx.fillStyle = bodyCol;
+        ctx.fillRect(cx - bodyW/2 - armW, baseY - bodyH - headSz + 2, armW, bodyH * 0.7);
+        ctx.fillStyle = skinCol;
+        ctx.fillRect(cx - bodyW/2 - armW, baseY - bodyH - headSz - 3, armW, 4);
+      }
+      // Raised arm right (~20% chance)
+      if (seededRand(seed * 6.1) < 0.20) {
+        ctx.fillStyle = bodyCol;
+        ctx.fillRect(cx + bodyW/2, baseY - bodyH - headSz + 2, armW, bodyH * 0.7);
+        ctx.fillStyle = skinCol;
+        ctx.fillRect(cx + bodyW/2, baseY - bodyH - headSz - 3, armW, 4);
+      }
+    }
+  }
+
+  // Railing at the pool-facing edge
+  const railY = regionY < g.H / 2 ? regionY + regionH - 4 : regionY;
+  ctx.fillStyle = '#c0a870';
+  ctx.fillRect(0, railY, W, 4);
+  ctx.strokeStyle = '#e8d090'; ctx.lineWidth = 1;
+  ctx.beginPath(); ctx.moveTo(0, railY); ctx.lineTo(W, railY); ctx.stroke();
+
+  ctx.restore();
+}
+
+function drawBleachers(g) {
+  const player = swimmers[PLAYER_IDX];
+  if (!player || !diveDone) return;
+
+  const sY = progressToScreenY(0,         player.progress, g);  // start/finish wall
+  const tY = progressToScreenY(TURN_PROG, player.progress, g);  // turn wall
+
+  // Beyond start wall (above it on screen when near top)
+  // The start wall is where sY lands — bleachers fill everything above it
+  if (sY > 0) {
+    // Bleachers from top of canvas down to sY
+    drawBleachersRegion(g, 0, sY);
+  }
+
+  // Beyond turn wall (below it on screen)
+  if (tY < g.H) {
+    // Bleachers from tY down to bottom of canvas
+    drawBleachersRegion(g, tY, g.H - tY);
+  }
+}
+
+// ── POOL ───────────────────────────────────────────────────
+function drawPool(g) {
+  const { poolL, poolW, laneW, H } = g;
+
+  // Clip pool water to the actual pool region (between start & turn walls)
+  const player = swimmers[PLAYER_IDX];
+  let clipTop = 0, clipBot = H;
+  if (player && diveDone) {
+    const sY = progressToScreenY(0,         player.progress, g);
+    const tY = progressToScreenY(TURN_PROG, player.progress, g);
+    clipTop = Math.max(0, Math.min(sY, tY));
+    clipBot = Math.min(H, Math.max(sY, tY));
+  }
+  ctx.save();
+  ctx.beginPath();
+  ctx.rect(poolL, clipTop, poolW, clipBot - clipTop);
+  ctx.clip();
+
+  // Water
+  const grad = ctx.createLinearGradient(g.poolL, 0, g.poolR, 0);
+  grad.addColorStop(0,   '#072e6e');
+  grad.addColorStop(0.5, '#0a4090');
+  grad.addColorStop(1,   '#072e6e');
+  ctx.fillStyle = grad;
+  ctx.fillRect(poolL, 0, poolW, H);
+
+  // Shimmer
+  for (let i=0; i<6; i++) {
+    const x = poolL + (i/5)*poolW;
+    const a = 0.03 + Math.sin(frameCount*0.016+i)*0.018;
+    ctx.strokeStyle = `rgba(100,180,255,${a})`; ctx.lineWidth = 2;
+    ctx.beginPath(); ctx.moveTo(x,0); ctx.lineTo(x,H); ctx.stroke();
+  }
+
+  // Lane ropes (vertical dotted lines between lanes)
+  for (let i=1; i<NUM_LANES; i++) {
+    const x = poolL + i*laneW;
+    for (let y=6; y<H; y+=13) {
+      const col = i%2===0 ? 'rgba(255,70,70,0.6)' : 'rgba(255,230,60,0.5)';
+      ctx.beginPath(); ctx.arc(x, y, 2.8, 0, Math.PI*2);
+      ctx.fillStyle = col; ctx.fill();
+    }
+  }
+
+  // Pool borders
+  ctx.strokeStyle = 'rgba(255,255,255,0.7)'; ctx.lineWidth = 3;
+  ctx.beginPath(); ctx.moveTo(poolL,0); ctx.lineTo(poolL,H); ctx.stroke();
+  ctx.beginPath(); ctx.moveTo(g.poolR,0); ctx.lineTo(g.poolR,H); ctx.stroke();
+
+  // Alternating lane tint
+  for (let i=0; i<NUM_LANES; i++) {
+    if (i%2===1) {
+      ctx.fillStyle = 'rgba(40,100,180,0.07)';
+      ctx.fillRect(poolL+i*laneW, 0, laneW, H);
+    }
+  }
+
+  ctx.restore(); // end pool clip
+}
+
+// ── POOL ENDS (deck + starting blocks) ────────────────────
+function drawPoolEnd(g, screenY, isStart, isTurn) {
+  // isStart: the start/finish end (progress=0 / progress=2000)
+  // isTurn:  the turn wall (progress=1000)
+  const { poolL, poolR, poolW, laneW, W } = g;
+
+  // How thick the deck band is (in px). Clamp so it never overflows screen badly.
+  const deckH = 28;
+
+  // Determine which side of the line the deck sits on.
+  // Start end (top of first lap) → deck is ABOVE the line (y - deckH)
+  // Turn end → deck is BELOW (y) — swimmer hits and turns back
+  // Finish end same as start end (progress=2000 maps to same absY as 0)
+  // We draw deck on both sides for the start/finish since it's cleaner.
+  const deckTopY  = screenY - deckH;
+  const deckBotY  = screenY;
+
+  // ── Deck slab ──
+  const deckGrad = ctx.createLinearGradient(0, deckTopY, 0, deckTopY + deckH);
+  if (isTurn) {
+    deckGrad.addColorStop(0, '#b0c4d8');
+    deckGrad.addColorStop(1, '#8a9fb5');
+  } else {
+    deckGrad.addColorStop(0, '#c8b88a');
+    deckGrad.addColorStop(0.5, '#a89060');
+    deckGrad.addColorStop(1, '#8a7248');
+  }
+
+  // Full-width deck (including deck margins)
+  ctx.fillStyle = deckGrad;
+  ctx.fillRect(0, deckTopY, W, deckH);
+
+  // Tile joints on the deck
+  ctx.strokeStyle = 'rgba(0,0,0,0.15)'; ctx.lineWidth = 1;
+  for (let tx = 0; tx < W; tx += 18) {
+    ctx.beginPath(); ctx.moveTo(tx, deckTopY); ctx.lineTo(tx, deckBotY); ctx.stroke();
+  }
+  ctx.beginPath(); ctx.moveTo(0, deckTopY + deckH*0.5); ctx.lineTo(W, deckTopY + deckH*0.5); ctx.stroke();
+
+  // ── Pool gutter / lip ──
+  ctx.fillStyle = isTurn ? '#6a8faf' : '#8a7248';
+  ctx.fillRect(poolL, deckTopY, poolW, 5);
+
+  // ── Wall face (the pool wall seen edge-on) ──
+  ctx.fillStyle = isTurn ? '#3a6f9f' : '#5a8060';
+  ctx.fillRect(poolL, screenY, poolW, 5);
+
+  // Black pool-end line
+  ctx.strokeStyle = isTurn ? 'rgba(255,255,84,0.95)' : 'rgba(255,255,255,0.90)';
+  ctx.lineWidth = 3;
+  ctx.beginPath(); ctx.moveTo(poolL, screenY); ctx.lineTo(poolR, screenY); ctx.stroke();
+
+  // ── Label on deck margin ──
+  const label = isTurn ? 'TURN' : (isStart ? 'START / FINISH' : 'FINISH');
+  const labelCol = isTurn ? '#ffff54' : '#54ff54';
+  ctx.fillStyle = labelCol;
+  ctx.font = "6px 'Press Start 2P'"; ctx.textAlign = 'center';
+  ctx.fillText(label, W * 0.5, deckTopY + 10);
+
+  // ── Starting blocks (only at the start end, not the turn wall) ──
+  if (!isTurn) {
+    for (let lane = 0; lane < NUM_LANES; lane++) {
+      const cx = poolL + (lane + 0.5) * laneW;
+      const bW = laneW * 0.38, bH = 9;
+      const bX = cx - bW / 2;
+      const bY = deckTopY + deckH - bH - 2;
+
+      // Block pedestal
+      const bGrad = ctx.createLinearGradient(bX, bY, bX, bY + bH);
+      bGrad.addColorStop(0, '#e0d0a0');
+      bGrad.addColorStop(1, '#9a8850');
+      ctx.fillStyle = bGrad;
+      ctx.fillRect(bX, bY, bW, bH);
+
+      // Block top surface highlight
+      ctx.fillStyle = 'rgba(255,255,200,0.5)';
+      ctx.fillRect(bX + 2, bY + 1, bW - 4, 3);
+
+      // Block outline
+      ctx.strokeStyle = 'rgba(0,0,0,0.45)'; ctx.lineWidth = 1;
+      ctx.strokeRect(bX, bY, bW, bH);
+
+      // Lane number on block
+      ctx.fillStyle = '#222';
+      ctx.font = "5px 'Press Start 2P'"; ctx.textAlign = 'center';
+      ctx.fillText(lane + 1, cx, bY + bH - 2);
+
+      // Grip texture stripes on block
+      ctx.strokeStyle = 'rgba(0,0,0,0.25)'; ctx.lineWidth = 1;
+      for (let gx = bX + 4; gx < bX + bW - 2; gx += 4) {
+        ctx.beginPath(); ctx.moveTo(gx, bY + 4); ctx.lineTo(gx, bY + bH - 1); ctx.stroke();
+      }
+    }
+  } else {
+    // Turn wall: touch pads — flat colored rectangles in each lane
+    for (let lane = 0; lane < NUM_LANES; lane++) {
+      const cx = poolL + (lane + 0.5) * laneW;
+      const tW = laneW * 0.55, tH = 7;
+      ctx.fillStyle = 'rgba(255,255,84,0.55)';
+      ctx.fillRect(cx - tW/2, screenY + 1, tW, tH);
+      ctx.strokeStyle = 'rgba(255,255,84,0.90)'; ctx.lineWidth = 1;
+      ctx.strokeRect(cx - tW/2, screenY + 1, tW, tH);
+    }
+  }
+}
+
+function drawWalls(g) {
+  const player = swimmers[PLAYER_IDX];
+  if (!player || !diveDone) return;
+
+  const sY   = progressToScreenY(0,           player.progress, g);
+  const tY   = progressToScreenY(TURN_PROG,   player.progress, g);
+  const fY   = progressToScreenY(POOL_LENGTH, player.progress, g);
+
+  // Start end (top of lap 1 / bottom of lap 2) — only draw if near screen
+  if (sY > -40 && sY < g.H + 40) drawPoolEnd(g, sY, true,  false);
+  // Turn wall
+  if (tY > -40 && tY < g.H + 40) drawPoolEnd(g, tY, false, true);
+  // Finish end same position as start end (progress 2000 → absY 0)
+  // sY and fY are identical, so we only need one draw call — already covered above.
+}
+
+// ── LANE NAMES ─────────────────────────────────────────────
+function drawLaneNames(g) {
+  swimmers.forEach((sw, i) => {
+    const x = laneToScreenX(i, g);
+    ctx.fillStyle = sw.isPlayer ? 'rgba(255,255,84,0.9)' : 'rgba(255,255,255,0.42)';
+    ctx.font = "6px 'Press Start 2P'"; ctx.textAlign = 'center';
+    ctx.fillText(sw.col.name, x, 11);
+  });
+}
+
+// ── RIPPLES ────────────────────────────────────────────────
+function drawRipples(g) {
+  const player = swimmers[PLAYER_IDX]; if (!player) return;
+  ripples.forEach(rp => {
+    const x = laneToScreenX(rp.lane, g);
+    const y = progressToScreenY(rp.progress, player.progress, g);
+    const r = 14*(1-rp.life);
+    ctx.beginPath();
+    ctx.ellipse(x, y, r*0.5, r, 0, 0, Math.PI*2);
+    ctx.strokeStyle = `rgba(140,210,255,${rp.life*0.48})`; ctx.lineWidth=1; ctx.stroke();
+  });
+}
+
+// ── SWIMMERS ───────────────────────────────────────────────
+// ── SWIMMERS ───────────────────────────────────────────────
+function drawSwimmers(g) {
+  const player = swimmers[PLAYER_IDX]; if (!player) return;
+  [...swimmers].sort((a,b)=>a.isPlayer?1:-1).forEach(sw => {
+    if (!sw.diving && !diveDone) return;
+    const x = laneToScreenX(sw.lane, g);
+    let y = progressToScreenY(sw.progress, player.progress, g);
+    if (!diveDone && sw.diveProgress<1) y -= (1-sw.diveProgress)*g.H*0.38;
+    if (y < -50 || y > g.H+50) return;
+    const goingUp = sw.progress <= TURN_PROG;
+    // Freeze finished swimmers in a still frame (0.25 = mid-stroke, arms out)
+    const cycle = sw.finished ? 0.25 : (sw.isPlayer ? armCycle : ((raceTime * 2.0 + sw.lane * 0.7) % 1));
+    drawPixelSwimmer(x, y, g.laneW, sw.col, cycle, sw.isPlayer, goingUp);
+  });
+}
+
+// ── PIXEL ART SWIMMER ─────────────────────────────────────
+// 10w x 20h grid. Overhead view, head at top (forward direction).
+// Frame A: left arm fwd, right arm trails, goggle right, right leg kicks
+// Frame B: right arm fwd, left arm trails, goggle left, left leg kicks
+// Indices: 0=transparent 1=skin 2=cap 3=goggle 4=suit 5=stripe
+
+const SWIM_FRAME_A = [
+  [0,1,0,0,0,0,0,0,0,0],
+  [0,1,0,0,0,0,0,0,0,0],
+  [0,1,0,0,0,0,0,0,0,0],
+  [0,0,0,2,2,2,0,0,0,0],
+  [0,0,2,2,2,2,2,0,0,0],
+  [0,0,2,2,2,2,2,3,0,0],
+  [0,0,2,2,2,2,2,0,0,0],
+  [0,0,0,2,2,2,0,0,0,0],
+  [0,0,4,4,4,4,4,4,1,1],
+  [0,0,4,5,4,4,5,4,1,1],
+  [0,0,4,4,4,4,4,4,1,0],
+  [0,0,4,5,4,4,5,4,0,0],
+  [0,0,4,4,4,4,4,4,0,0],
+  [0,0,4,5,4,4,5,4,0,0],
+  [0,0,0,4,4,4,4,0,0,0],
+  [0,0,0,4,0,0,4,0,0,0],
+  [0,0,0,4,0,0,4,0,0,0],
+  [0,0,0,1,0,0,1,0,0,0],
+  [0,0,0,1,0,0,1,1,0,0],
+  [0,0,0,0,0,0,0,1,0,0],
+];
+
+const SWIM_FRAME_B = [
+  [0,0,0,0,0,0,0,0,1,0],
+  [0,0,0,0,0,0,0,0,1,0],
+  [0,0,0,0,0,0,0,0,1,0],
+  [0,0,0,2,2,2,0,0,0,0],
+  [0,0,2,2,2,2,2,0,0,0],
+  [0,3,2,2,2,2,2,0,0,0],
+  [0,0,2,2,2,2,2,0,0,0],
+  [0,0,0,2,2,2,0,0,0,0],
+  [1,1,4,4,4,4,4,4,0,0],
+  [1,1,4,5,4,4,5,4,0,0],
+  [0,1,4,4,4,4,4,4,0,0],
+  [0,0,4,5,4,4,5,4,0,0],
+  [0,0,4,4,4,4,4,4,0,0],
+  [0,0,4,5,4,4,5,4,0,0],
+  [0,0,0,4,4,4,4,0,0,0],
+  [0,0,0,4,0,0,4,0,0,0],
+  [0,0,0,4,0,0,4,0,0,0],
+  [0,0,0,1,0,0,1,0,0,0],
+  [1,1,1,0,0,0,1,0,0,0],
+  [1,0,0,0,0,0,0,0,0,0],
+];
+
+function drawPixelSwimmer(cx, cy, laneW, col, cycle, isPlayer, goingUp) {
+  const COLS = 10, ROWS = 20;
+  const ps = Math.max(2, Math.floor(laneW * 0.85 / COLS));
+  const sr = parseInt(col.suit.slice(1,3),16);
+  const sg = parseInt(col.suit.slice(3,5),16);
+  const sb = parseInt(col.suit.slice(5,7),16);
+  const palette = [
+    null, '#dba876', col.cap, '#00dddd', col.suit,
+    `rgb(${Math.min(255,sr+70)},${Math.min(255,sg+70)},${Math.min(255,sb+70)})`,
+  ];
+  const grid = cycle < 0.5 ? SWIM_FRAME_A : SWIM_FRAME_B;
+  const totalW = COLS * ps, totalH = ROWS * ps;
+  const ox = -Math.floor(totalW/2), oy = -Math.floor(totalH/2);
+  ctx.save();
+  ctx.translate(Math.round(cx), Math.round(cy));
+  if (!goingUp) ctx.scale(1,-1);
+  ctx.fillStyle = 'rgba(120,190,255,0.12)';
+  ctx.fillRect(ox+totalW*0.2, oy+totalH*0.55, totalW*0.6, totalH*0.55);
+  for (let row=0; row<ROWS; row++) {
+    for (let c=0; c<COLS; c++) {
+      const idx = grid[row][c];
+      if (!idx) continue;
+      ctx.fillStyle = palette[idx];
+      ctx.fillRect(ox+c*ps, oy+row*ps, ps, ps);
+    }
+  }
+  if (isPlayer) {
+    // Small white dot to the left of the swimmer, won't blend with cap
+    ctx.fillStyle = 'rgba(255,255,255,0.95)';
+    ctx.fillRect(ox - ps*2, oy + Math.floor(totalH*0.25) - ps, ps, ps*2);
+  }
+  ctx.restore();
+}
+
+
+// ── SPLASHES ───────────────────────────────────────────────
+function drawSplashes(g) {
+  const player = swimmers[PLAYER_IDX]; if (!player) return;
+  splashes.forEach(sp => {
+    const x = laneToScreenX(sp.lane, g);
+    const y = progressToScreenY(sp.progress, player.progress, g);
+    ctx.beginPath(); ctx.arc(x+sp.dx, y+sp.dy, sp.r*sp.life, 0, Math.PI*2);
+    ctx.fillStyle = `rgba(180,230,255,${sp.life*0.72})`; ctx.fill();
+  });
+}
+
+// ── TIMING BAR ─────────────────────────────────────────────
+function drawTimingBar(g) {
+  const { W, barX, barY, barH, barW } = g;
+  const panH = barH + 48;
+
+  // Panel
+  ctx.fillStyle = 'rgba(0,0,28,0.90)';
+  ctx.fillRect(barX-12, barY-16, barW+24, panH);
+  ctx.strokeStyle = '#7b68ee'; ctx.lineWidth=2;
+  ctx.strokeRect(barX-12, barY-16, barW+24, panH);
+
+  // Label
+  ctx.fillStyle='#b8a8ff'; ctx.font="7px 'Press Start 2P'"; ctx.textAlign='center';
+  ctx.fillText('TAP ANYWHERE — HIT THE GREEN ZONES', W/2, barY-4);
+
+  // Track
+  ctx.fillStyle='#060418'; ctx.fillRect(barX, barY, barW, barH);
+  ctx.strokeStyle='rgba(84,255,255,0.30)'; ctx.lineWidth=1.5;
+  ctx.strokeRect(barX, barY, barW, barH);
+
+  // Green zones
+  const gz=barW*0.07, pz=barW*0.032;
+  ctx.fillStyle='rgba(84,255,84,0.22)';
+  ctx.fillRect(barX,         barY, gz, barH);
+  ctx.fillRect(barX+barW-gz, barY, gz, barH);
+  ctx.fillStyle='rgba(84,255,84,0.52)';
+  ctx.fillRect(barX,         barY, pz, barH);
+  ctx.fillRect(barX+barW-pz, barY, pz, barH);
+  ctx.strokeStyle='rgba(84,255,84,0.65)'; ctx.lineWidth=1.5;
+  ctx.beginPath();
+  ctx.moveTo(barX+gz, barY); ctx.lineTo(barX+gz, barY+barH);
+  ctx.moveTo(barX+barW-gz, barY); ctx.lineTo(barX+barW-gz, barY+barH);
+  ctx.stroke();
+
+  // Dash
+  const dashX = barX + barDash*barW, dHW = barW*0.042;
+  ctx.shadowColor='#fff'; ctx.shadowBlur=14;
+  ctx.fillStyle='#fff';
+  ctx.fillRect(dashX-dHW, barY+2, dHW*2, barH-4);
+  ctx.shadowBlur=0;
+
+  // Power bar
+  const pwY=barY+barH+6, pwH=8;
+  ctx.fillStyle='#060418'; ctx.fillRect(barX, pwY, barW, pwH);
+  const pwCol = strokePower>0.75 ? '#ffff54' : strokePower>0.45 ? '#54ff54' : '#54ffff';
+  ctx.fillStyle=pwCol; ctx.fillRect(barX, pwY, barW*strokePower, pwH);
+  ctx.strokeStyle='rgba(84,255,255,0.25)'; ctx.lineWidth=1; ctx.strokeRect(barX, pwY, barW, pwH);
+
+  ctx.fillStyle='rgba(180,168,255,0.72)'; ctx.font="7px 'Press Start 2P'";
+  ctx.textAlign='left';  ctx.fillText('PWR', barX, pwY+pwH+11);
+  ctx.textAlign='right'; ctx.fillText(Math.round(strokePower*100)+'%', barX+barW, pwY+pwH+11);
+}
+
+// ── COUNTDOWN ──────────────────────────────────────────────
+function drawCountdown(g) {
+  ctx.fillStyle='rgba(0,0,30,0.52)';
+  ctx.fillRect(0, 0, g.W, g.H);
+  const msg = countdownVal>0 ? String(countdownVal) : 'GO!';
+  const col = countdownVal>0 ? '#ffff54' : '#54ff54';
+  ctx.fillStyle=col; ctx.font="52px 'Press Start 2P'";
+  ctx.textAlign='center'; ctx.textBaseline='middle';
+  ctx.shadowColor=col; ctx.shadowBlur=24;
+  ctx.fillText(msg, g.W/2, g.H/2);
+  ctx.shadowBlur=0; ctx.textBaseline='alphabetic';
+}
+
+// ── FLASH ──────────────────────────────────────────────────
+function drawFlash(g) {
+  const player = swimmers[PLAYER_IDX];
+  const cx = laneToScreenX(PLAYER_IDX, g);
+  const cy = progressToScreenY(player.progress, player.progress, g) - 30;
+  ctx.fillStyle='rgba(0,0,30,0.82)'; ctx.fillRect(cx-72, cy-13, 144, 22);
+  ctx.strokeStyle=flashColor; ctx.lineWidth=1.5; ctx.strokeRect(cx-72, cy-13, 144, 22);
+  ctx.fillStyle=flashColor; ctx.font="9px 'Press Start 2P'"; ctx.textAlign='center';
+  ctx.fillText(flashMsg, cx, cy+4);
+}
+
+// ── BOOT ───────────────────────────────────────────────────
+resize(); draw(); showStart();
+</script>
+</body>
+</html>
