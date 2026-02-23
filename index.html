@@ -262,7 +262,7 @@ const GAMES = [
   {name:'LUNAR\nLANDER',  loc:'CAPE CANAVERAL', url:'lunar-lander.html', active:true,  score:0, iconFn:'iconLunarLander'},
   {name:'STONE\nCOLD',    loc:'CALGARY, CANADA', url:'stone-cold.html',   active:true,  score:0, iconFn:'iconCurling'},
   {name:'FAIR\nWAY',      loc:'PEBBLE BEACH',    url:'fairway.html',      active:true,  score:0, iconFn:'iconGolf'},
-  {name:'SKI\nJUMP',      loc:'SWISS ALPS',      url:'#',                 active:false, score:0, iconFn:'iconSki'},
+  {name:'DOWN\nTOWN',     loc:'32953 ARENA',     url:'downtown.html',     active:true,  score:0, iconFn:'iconBasketball'},
   {name:'TANK\nBATTLE',   loc:'UKRAINE',         url:'#',                 active:false, score:0, iconFn:'iconTank'},
   {name:'ASTEROID\nRUN',  loc:'DEEP SPACE',      url:'#',                 active:false, score:0, iconFn:'iconAsteroid'},
   {name:'JUNGLE\nRUN',    loc:'AMAZON',          url:'#',                 active:false, score:0, iconFn:'iconJungle'},
@@ -626,9 +626,53 @@ function iconGolf(ctx, s) {
   px(ctx,'#236623', 0,4*u,2*u,3*u);
 }
 
+function iconBasketball(ctx, s) {
+  const u = s/16;
+  // Court floor — hardwood brown
+  px(ctx,'#b8692a', 0,0,16*u,16*u);
+  // Wood grain lines
+  px(ctx,'rgba(0,0,0,0.15)', 0,3*u,16*u,u);
+  px(ctx,'rgba(0,0,0,0.15)', 0,6*u,16*u,u);
+  px(ctx,'rgba(0,0,0,0.12)', 0,9*u,16*u,u);
+  px(ctx,'rgba(0,0,0,0.15)', 0,12*u,16*u,u);
+  // 3-pt arc (white, curved bottom half)
+  px(ctx,'#ffffff', 2*u,5*u,u,u);
+  px(ctx,'#ffffff', u,6*u,u,u);
+  px(ctx,'#ffffff', u,7*u,u,3*u);
+  px(ctx,'#ffffff', u,10*u,u,u);
+  px(ctx,'#ffffff', 2*u,11*u,u,u);
+  px(ctx,'#ffffff', 3*u,12*u,2*u,u);
+  px(ctx,'#ffffff', 5*u,13*u,6*u,u);
+  px(ctx,'#ffffff', 11*u,12*u,2*u,u);
+  px(ctx,'#ffffff', 13*u,11*u,u,u);
+  px(ctx,'#ffffff', 14*u,10*u,u,u);
+  px(ctx,'#ffffff', 14*u,7*u,u,3*u);
+  px(ctx,'#ffffff', 14*u,6*u,u,u);
+  px(ctx,'#ffffff', 13*u,5*u,u,u);
+  // Lane (blue paint)
+  px(ctx,'rgba(44,70,150,0.55)', 5*u,0,6*u,8*u);
+  // FT line
+  px(ctx,'#ffffff', 5*u,7*u,6*u,u);
+  // Rim (orange circle, top center)
+  px(ctx,'#ff8800', 6*u,u,4*u,u);
+  px(ctx,'#ff8800', 5*u,2*u,u,2*u);
+  px(ctx,'#ff8800', 10*u,2*u,u,2*u);
+  px(ctx,'#ff8800', 6*u,4*u,4*u,u);
+  // Basketball (orange, lower right)
+  px(ctx,'#ff8800', 10*u,9*u,u,u);
+  px(ctx,'#ff8800', 9*u,10*u,4*u,u);
+  px(ctx,'#ff8800', 9*u,11*u,4*u,u);
+  px(ctx,'#ff8800', 9*u,12*u,4*u,u);
+  px(ctx,'#ff8800', 10*u,13*u,2*u,u);
+  // Ball seams
+  px(ctx,'rgba(0,0,0,0.45)', 9*u,11*u,4*u,u);
+  px(ctx,'rgba(0,0,0,0.45)', 11*u,10*u,u,4*u);
+}
+
+
 const ICON_FNS = {
   iconLunarLander, iconCurling, iconGolf, iconCar, iconSub, iconSki, iconTank,
-  iconAsteroid, iconJungle, iconPlane, iconGold, iconDiver
+  iconAsteroid, iconJungle, iconPlane, iconGold, iconDiver, iconBasketball
 };
 
 // Build icon canvas
