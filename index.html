@@ -264,6 +264,7 @@ const GAMES = [
   {name:'FAIR\nWAY',      loc:'PEBBLE BEACH',    url:'fairway.html',      active:true,  score:0, iconFn:'iconGolf'},
   {name:'DOWN\nTOWN',     loc:'32953 ARENA',     url:'downtown.html',     active:true,  score:0, iconFn:'iconBasketball'},
   {name:'SPLASH',      loc:'OLYMPIC POOL',    url:'splash.html',       active:true,  score:0, iconFn:'iconSwim'},
+  {name:'HOMERUN\nPITCH', loc:'PROGRESSIVE FLD', url:'homerun-pitch.html',active:true,  score:0, iconFn:'iconBaseball'},
   {name:'ASTEROID\nRUN',  loc:'DEEP SPACE',      url:'#',                 active:false, score:0, iconFn:'iconAsteroid'},
   {name:'JUNGLE\nRUN',    loc:'AMAZON',          url:'#',                 active:false, score:0, iconFn:'iconJungle'},
   {name:'DOGFIGHT',       loc:'ENGLISH CH.',     url:'#',                 active:false, score:0, iconFn:'iconPlane'},
@@ -539,6 +540,91 @@ function iconDiver(ctx, s) {
 }
 
 
+function iconBaseball(ctx, s) {
+  const u = s/16;
+
+  // ── BACKGROUND: night sky ─────────────────────────────────────
+  px(ctx,'#02020e', 0,0,16*u,16*u);
+  // Stars
+  px(ctx,'#ffffd0', 2*u,u,u,u);
+  px(ctx,'#ffffff', 9*u,2*u,u,u);
+  px(ctx,'#ffffd0', 13*u,u,u,u);
+  px(ctx,'#ffffff', 5*u,3*u,u,u);
+
+  // ── STADIUM LIGHTS (2 poles) ──────────────────────────────────
+  px(ctx,'#555555', 2*u,4*u,u,4*u);   // left pole
+  px(ctx,'#ffff88', u,3*u,3*u,u);     // left light bar
+  px(ctx,'#555555', 13*u,4*u,u,4*u);  // right pole
+  px(ctx,'#ffff88', 12*u,3*u,3*u,u);  // right light bar
+  // Light glow blobs
+  px(ctx,'rgba(255,255,150,0.18)', u,4*u,4*u,3*u);
+  px(ctx,'rgba(255,255,150,0.18)', 11*u,4*u,4*u,3*u);
+
+  // ── OUTFIELD WALL (green, white cap) ─────────────────────────
+  px(ctx,'#174d17', 0,7*u,16*u,2*u);   // wall face
+  px(ctx,'#1d6a1d', 0,7*u,16*u,u);     // lighter top of wall
+  px(ctx,'#ffffff', 0,7*u,16*u,u/2);   // white cap line
+  // Distance marker
+  px(ctx,'#ffffff', 7*u,8*u,2*u,u);    // "400" hint
+
+  // ── BLEACHERS (3 vertical sections behind wall) ───────────────
+  // LF section
+  px(ctx,'#221860', 0,4*u,5*u,3*u);
+  px(ctx,'rgba(80,60,200,.3)', 0,5*u,5*u,u);
+  // CF section (darker)
+  px(ctx,'#1a1248', 6*u,5*u,4*u,2*u);
+  // RF section
+  px(ctx,'#221860', 11*u,4*u,5*u,3*u);
+  px(ctx,'rgba(80,60,200,.3)', 11*u,5*u,5*u,u);
+  // Tiny crowd dots in sections
+  px(ctx,'#cc3333', u,4*u,u,u);
+  px(ctx,'#3355cc', 3*u,5*u,u,u);
+  px(ctx,'#ffcc00', 2*u,4*u,u,u);
+  px(ctx,'#33cc88', 12*u,4*u,u,u);
+  px(ctx,'#cc7722', 14*u,5*u,u,u);
+  px(ctx,'#ffcc00', 13*u,4*u,u,u);
+
+  // ── FIELD GRASS ───────────────────────────────────────────────
+  px(ctx,'#1a5c1a', 0,9*u,16*u,7*u);
+  px(ctx,'#1e6e1e', 0,10*u,16*u,u);   // mowing stripes
+  px(ctx,'#1e6e1e', 0,12*u,16*u,u);
+  px(ctx,'#1e6e1e', 0,14*u,16*u,u);
+
+  // ── INFIELD DIRT ──────────────────────────────────────────────
+  px(ctx,'#7a5030', 5*u,12*u,6*u,4*u);
+  px(ctx,'#8b6040', 6*u,11*u,4*u,5*u);
+
+  // ── HOME PLATE ────────────────────────────────────────────────
+  px(ctx,'#ffffff', 7*u,15*u,2*u,u);
+
+  // ── BATTER (tiny silhouette at plate) ────────────────────────
+  px(ctx,'#1a1a55', 6*u,13*u,u,2*u);   // legs
+  px(ctx,'#eeeeee', 6*u,12*u,2*u,u);   // body
+  px(ctx,'#dba876', 6*u,11*u,u,u);     // head
+  px(ctx,'#c87840', 8*u,12*u,3*u,u);   // bat (horizontal swing)
+  px(ctx,'#c87840', 7*u,11*u,u,u);     // bat handle up
+
+  // ── BASEBALL — arcing through the air toward CF wall ──────────
+  // Ball in flight, mid-arc, glowing
+  px(ctx,'rgba(255,255,200,0.6)', 9*u,5*u,3*u,u);   // glow
+  px(ctx,'rgba(255,255,200,0.6)', 8*u,6*u,4*u,u);
+  px(ctx,'#f5f5d8', 9*u,6*u,2*u,u);    // ball top
+  px(ctx,'#f5f5d8', 8*u,7*u,4*u,u);    // ball middle
+  px(ctx,'#f5f5d8', 9*u,8*u,2*u,u);    // ball bottom
+  // Red seams
+  px(ctx,'#cc3333', 9*u,6*u,u,u);
+  px(ctx,'#cc3333', 11*u,7*u,u,u);
+  px(ctx,'#cc3333', 8*u,8*u,u,u);
+
+  // ── MOTION TRAIL ─────────────────────────────────────────────
+  px(ctx,'rgba(255,255,200,0.25)', 6*u,9*u,u,u);
+  px(ctx,'rgba(255,255,200,0.35)', 7*u,8*u,u,u);
+  px(ctx,'rgba(255,255,200,0.45)', 8*u,7*u,u,u);
+
+  // ── FOUL POLE (yellow, left) ──────────────────────────────────
+  px(ctx,'#ffff00', u,5*u,u,5*u);
+}
+
 function iconSwim(ctx, s) {
   const u = s/16;
   // Pool water background
@@ -720,7 +806,7 @@ function iconBasketball(ctx, s) {
 
 const ICON_FNS = {
   iconLunarLander, iconCurling, iconGolf, iconCar, iconSub, iconSki, iconTank,
-  iconAsteroid, iconJungle, iconPlane, iconGold, iconDiver, iconBasketball, iconSwim
+  iconAsteroid, iconJungle, iconPlane, iconGold, iconDiver, iconBasketball, iconSwim, iconBaseball
 };
 
 // Build icon canvas
