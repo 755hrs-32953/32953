@@ -10,7 +10,6 @@
   *{margin:0;padding:0;box-sizing:border-box;}
   html,body{width:100%;height:100%;background:#000;display:flex;align-items:center;justify-content:center;
     overflow:hidden;font-family:'Press Start 2P',monospace;position:fixed;top:0;left:0;right:0;bottom:0;}
-  /* CSS UPDATED: Responsive Width */
   #app{width:100%;max-width:500px;background:var(--bg);display:flex;flex-direction:column;position:relative;
     overflow:hidden;border:3px solid var(--dark);box-shadow:0 0 40px #7b68ee44;}
   #header{background:var(--purple);border-bottom:4px solid var(--dark);padding:6px 12px;
@@ -96,7 +95,6 @@ let flashMsg='',flashCol=C.gold,flashAlpha=0;
 let confetti=[];
 let celebrating=false;
 
-// DYNAMIC FONT SCALER 
 function getFont(baseSize, W){
   return Math.max(baseSize*0.65, W*(baseSize/380)) + "px 'Press Start 2P'";
 }
@@ -206,16 +204,36 @@ function gStad(){
     {x:W*.96,   y:H*.500, h:H*.035, ft:325}, 
     {x:W*1.05,  y:H*.500, h:H*.035, ft:325},
   ];
-  const diam=H*.20;
-  const s2x=px,s2y=py-diam;
-  const s1x=px+diam*.52,s1y=py-diam*.50;
-  const s3x=px-diam*.52,s3y=py-diam*.50;
-  const mx=px,my=(py+s2y)/2;
+  
+  const baseDist = H * 0.145; 
+  
+  const dx3 = w[1].x - px;
+  const dy3 = w[1].y - py;
+  const len3 = Math.hypot(dx3, dy3);
+  const s3x = px + (dx3 / len3) * baseDist;
+  const s3y = py + (dy3 / len3) * baseDist;
+
+  const dx1 = w[7].x - px;
+  const dy1 = w[7].y - py;
+  const len1 = Math.hypot(dx1, dy1);
+  const s1x = px + (dx1 / len1) * baseDist;
+  const s1y = py + (dy1 / len1) * baseDist;
+
+  const s2x = s1x + s3x - px;
+  const s2y = s1y + s3y - py;
+  
+  const mx = (px + s2x) / 2;
+  const my = (py + s2y) / 2;
+  
   return{W,H,px,py,wall:w,s1x,s1y,s2x,s2y,s3x,s3y,mx,my};
 }
 
+// BOUNDARY CLAMP FIX: Out-of-bounds inputs evaluate gracefully to extrema
 function wallAt(t,w){
   const tx = w[0].x + t * (w[w.length-1].x - w[0].x);
+  if (tx <= w[0].x) return {x: w[0].x, y: w[0].y, h: w[0].h, ft: w[0].ft};
+  if (tx >= w[w.length-1].x) return {x: w[w.length-1].x, y: w[w.length-1].y, h: w[w.length-1].h, ft: w[w.length-1].ft};
+  
   for(let i=0; i<w.length-1; i++){
     const dx = w[i+1].x - w[i].x;
     if(dx > 0 && tx >= w[i].x && tx <= w[i+1].x + 0.1){
@@ -249,23 +267,19 @@ function drawPitchView(){
 
   const hpx=W*.5, hpy=batterY+(H*0.05);
   
-  // Responsive Base paths (Brown)
   ctx.strokeStyle='#7a5028';
   ctx.lineWidth=W*0.084;
   ctx.beginPath();ctx.moveTo(hpx,hpy);ctx.lineTo(hpx-H,hpy-H);ctx.stroke(); 
   ctx.beginPath();ctx.moveTo(hpx,hpy);ctx.lineTo(hpx+H,hpy-H);ctx.stroke(); 
 
-  // Responsive Solid foul lines (White)
   ctx.strokeStyle='rgba(255,255,255,.85)';
   ctx.lineWidth=Math.max(1.5, W*0.005);
   ctx.beginPath();ctx.moveTo(hpx,hpy);ctx.lineTo(hpx-H,hpy-H);ctx.stroke(); 
   ctx.beginPath();ctx.moveTo(hpx,hpy);ctx.lineTo(hpx+H,hpy-H);ctx.stroke(); 
 
-  // Home Plate Dirt Cutout
   ctx.fillStyle='#7a5028';
   ctx.beginPath();ctx.ellipse(hpx, hpy+(H*0.01), W*.13, H*.055, 0, 0, Math.PI*2);ctx.fill();
 
-  // Home Plate Geometry
   ctx.fillStyle='#fff';
   const hw = W*0.024;
   const hy = H*0.015;
@@ -277,14 +291,12 @@ function drawPitchView(){
   ctx.lineTo(hpx - hw, hpy);
   ctx.closePath();ctx.fill();
   
-  // Strike Zone Boxes
   ctx.strokeStyle='rgba(255,255,255,.45)';ctx.lineWidth=1;
   const szW = W*0.053;
   const szH = H*0.062;
   ctx.strokeRect(hpx - W*0.1, hpy - H*0.04, szW, szH);
   ctx.strokeRect(hpx + W*0.047, hpy - H*0.04, szW, szH);
 
-  // Pitcher Mound
   ctx.fillStyle='#c88b55'; 
   ctx.beginPath();ctx.ellipse(W*.5, moundY, W*.12, H*.035, 0, 0, Math.PI*2);ctx.fill();
   ctx.fillStyle='#a06030';
@@ -298,7 +310,6 @@ function drawPitchView(){
     const bx=W*.5+ballCurve;
     const by=pitcherY+(batterY-pitcherY)*tPct;
     
-    // Responsive Ball Size
     const bSz = W*0.006 + tPct * (W*0.017);
     
     const toY=t=>pitcherY+(batterY-pitcherY)*t;
@@ -622,15 +633,22 @@ function drawStadium(dt){
   ctx.fillStyle='#333';ctx.fillRect(sbX+sbW*.3,sbY+sbH,4,12);
   ctx.fillRect(sbX+sbW*.7,sbY+sbH,4,12);
 
-  [{x:.06,h:H*0.12},{x:.30,h:H*0.09},{x:.70,h:H*0.09},{x:.94,h:H*0.12}].forEach(lp=>{
+  [
+    {x:.06, h:H*0.12, strips:8, lRatio:0.65},
+    {x:.30, h:H*0.09, strips:8, lRatio:0.65},
+    {x:.70, h:H*0.09, strips:8, lRatio:0.65},
+    {x:.86, h:H*0.14, strips:3, lRatio:0.20}, 
+    {x:.91, h:H*0.14, strips:3, lRatio:0.20},
+    {x:.96, h:H*0.14, strips:3, lRatio:0.20}
+  ].forEach(lp=>{
     const lx=W*lp.x;
     const poleBase=bleacherTopY(lp.x); 
     const ly=poleBase-lp.h;
     const pw=Math.max(3, W*0.013); 
     ctx.fillStyle='#444';
     ctx.fillRect(lx-pw/2, ly, pw, lp.h);
-    const numStrips=8;
-    const stripH = (lp.h*0.65)/numStrips;
+    const numStrips=lp.strips;
+    const stripH = (lp.h*lp.lRatio)/numStrips;
     const stripW = pw-2;
     ctx.shadowColor='#ffffcc'; ctx.shadowBlur=8; 
     ctx.fillStyle='#ffffee'; 
@@ -693,8 +711,8 @@ function drawStadium(dt){
   ctx.fillRect(wall[7].x-1,wall[7].y-wall[7].h-(H*0.11),Math.max(2, W*0.008),H*0.12+wall[7].h);
 
   ctx.strokeStyle='rgba(255,255,255,.6)';ctx.lineWidth=Math.max(1, W*0.003);ctx.setLineDash([]);
-  ctx.beginPath();ctx.moveTo(plateX,plateY);ctx.lineTo(wall[1].x,wall[1].y+(H*0.05));ctx.stroke();
-  ctx.beginPath();ctx.moveTo(plateX,plateY);ctx.lineTo(wall[7].x,wall[7].y+(H*0.05));ctx.stroke();
+  ctx.beginPath();ctx.moveTo(plateX,plateY);ctx.lineTo(wall[1].x,wall[1].y);ctx.stroke();
+  ctx.beginPath();ctx.moveTo(plateX,plateY);ctx.lineTo(wall[7].x,wall[7].y);ctx.stroke();
 
   ctx.fillStyle='#8b6040';
   ctx.beginPath();ctx.ellipse(plateX, plateY-2, W*.07, W*.04, 0, 0, Math.PI*2);ctx.fill();
@@ -712,6 +730,20 @@ function drawStadium(dt){
   ctx.ellipse((plateX+s2x)/2, (plateY+s2y)/2, W*.18, (plateY-s2y)*.56, 0, 0, Math.PI*2);
   ctx.fill();
   ctx.restore();
+
+  // ── NEW: CONCENTRIC GRASS POLYGON ──
+  const cx = plateX;
+  const cy = (plateY + s2y) / 2;
+  const scale = 0.62; 
+
+  ctx.fillStyle = fg;
+  ctx.beginPath();
+  ctx.moveTo(cx + (plateX - cx) * scale, cy + (plateY - cy) * scale);
+  ctx.lineTo(cx + (s1x - cx) * scale, cy + (s1y - cy) * scale);
+  ctx.lineTo(cx + (s2x - cx) * scale, cy + (s2y - cy) * scale);
+  ctx.lineTo(cx + (s3x - cx) * scale, cy + (s3y - cy) * scale);
+  ctx.closePath();
+  ctx.fill();
 
   ctx.strokeStyle='rgba(255,255,255,.18)';ctx.lineWidth=1;
   ctx.beginPath();ctx.moveTo(plateX,plateY);ctx.lineTo(s1x,s1y);ctx.lineTo(s2x,s2y);ctx.lineTo(s3x,s3y);ctx.lineTo(plateX,plateY);ctx.stroke();
@@ -810,7 +842,6 @@ function drawStadium(dt){
     const arcH = Math.min(H*.44, visualDist*.20);
     const by = ly2 - arcH * Math.sin(tPct * Math.PI);
     
-    // Responsive Hit Ball Size
     const bSz = Math.max(W*0.004, (W*0.015) - tPct * (W*0.01));
 
     ctx.fillStyle=`rgba(0,0,0,${.08+tPct*.28})`;
