@@ -29,6 +29,9 @@
     background:var(--gold);color:#000;border:3px solid #fff;cursor:pointer;letter-spacing:2px;
     box-shadow:4px 4px 0 var(--dark);margin-top:8px;}
   .big-btn:active{transform:translate(2px,2px);box-shadow:2px 2px 0 var(--dark);}
+  .sec-btn{font-family:'Press Start 2P',monospace;font-size:9px;padding:8px 20px;
+    background:var(--cyan);color:#000;border:2px solid #fff;cursor:pointer;letter-spacing:1px;
+    box-shadow:3px 3px 0 var(--dark);margin-top:4px;}
   #botbar{background:var(--purple);border-top:4px solid var(--dark);padding:4px 10px;
     display:flex;justify-content:space-between;align-items:center;flex-shrink:0;}
   .bot-item{font-size:9px;color:#d4c0ff;letter-spacing:1px;}
@@ -228,7 +231,6 @@ function gStad(){
   return{W,H,px,py,wall:w,s1x,s1y,s2x,s2y,s3x,s3y,mx,my};
 }
 
-// BOUNDARY CLAMP FIX: Out-of-bounds inputs evaluate gracefully to extrema
 function wallAt(t,w){
   const tx = w[0].x + t * (w[w.length-1].x - w[0].x);
   if (tx <= w[0].x) return {x: w[0].x, y: w[0].y, h: w[0].h, ft: w[0].ft};
@@ -284,11 +286,11 @@ function drawPitchView(){
   const hw = W*0.024;
   const hy = H*0.015;
   ctx.beginPath();
-  ctx.moveTo(hpx, hpy - H*0.02);
-  ctx.lineTo(hpx + hw, hpy);
-  ctx.lineTo(hpx + hw, hpy + hy);
-  ctx.lineTo(hpx - hw, hpy + hy);
-  ctx.lineTo(hpx - hw, hpy);
+  ctx.moveTo(hpx - hw, hpy - hy); 
+  ctx.lineTo(hpx + hw, hpy - hy); 
+  ctx.lineTo(hpx + hw, hpy);      
+  ctx.lineTo(hpx, hpy + hy);      
+  ctx.lineTo(hpx - hw, hpy);      
   ctx.closePath();ctx.fill();
   
   ctx.strokeStyle='rgba(255,255,255,.45)';ctx.lineWidth=1;
@@ -615,45 +617,56 @@ function drawStadium(dt){
     }
   });
 
-  const sbBaseY=bleacherTopY(.12);
-  const sbW=W*.30, sbH=H*.090;
-  const sbX=W*.02;
-  const sbY=sbBaseY-sbH-4;
-  ctx.fillStyle='#111';ctx.fillRect(sbX,sbY,sbW,sbH);
-  ctx.strokeStyle='#c41e3a';ctx.lineWidth=Math.max(2, W*0.008);ctx.strokeRect(sbX,sbY,sbW,sbH);
-  ctx.fillStyle='#081808';ctx.fillRect(sbX+3,sbY+3,sbW-6,sbH-6);
-  ctx.fillStyle='#ff4444';ctx.font=getFont(5,W);
-  ctx.fillText('PROGRESSIVE',sbX+W*0.015,sbY+H*0.026);
-  ctx.fillStyle='#ffcc00';ctx.font=getFont(4,W);
-  ctx.fillText('FIELD',sbX+W*0.015,sbY+H*0.045);
-  ctx.fillStyle='#44ff88';ctx.font=getFont(4,W);
-  ctx.fillText('CLE  '+hrCount+'  HR',sbX+W*0.015,sbY+H*0.07);
-  ctx.fillStyle='rgba(255,80,80,.3)';
-  for(let di=0;di<12;di++) ctx.fillRect(sbX+(W*0.015)+di*(W*0.013),sbY+sbH-(H*0.02), W*0.008, H*0.01);
-  ctx.fillStyle='#333';ctx.fillRect(sbX+sbW*.3,sbY+sbH,4,12);
-  ctx.fillRect(sbX+sbW*.7,sbY+sbH,4,12);
+  // TIRE WORLD SCOREBOARD
+  const sbBaseY = bleacherTopY(0.50);
+  const sbW = W * 0.30;
+  const sbH = H * 0.090;
+  const sbX = (W * 0.50) - (sbW / 2);
+  const sbY = sbBaseY - sbH - (H * 0.02);
+  
+  ctx.fillStyle='#fff'; ctx.fillRect(sbX,sbY,sbW,sbH);
+  ctx.strokeStyle='#333'; ctx.lineWidth=2; ctx.strokeRect(sbX,sbY,sbW,sbH);
+  
+  // Tire Image
+  const tireX = sbX + sbW * 0.78;
+  const tireY = sbY + sbH * 0.45;
+  const tireR = sbH * 0.32;
+  ctx.fillStyle='#111'; ctx.beginPath(); ctx.ellipse(tireX, tireY, tireR, tireR, 0, 0, Math.PI*2); ctx.fill();
+  ctx.fillStyle='#666'; ctx.beginPath(); ctx.ellipse(tireX, tireY, tireR*0.4, tireR*0.4, 0, 0, Math.PI*2); ctx.fill();
 
+  ctx.fillStyle='#e00'; ctx.font=getFont(5,W);
+  ctx.fillText('TIRE WORLD',sbX+W*0.015,sbY+H*0.026);
+  ctx.fillStyle='#111'; ctx.font=getFont(4,W);
+  ctx.fillText('BEST DEALS',sbX+W*0.015,sbY+H*0.045);
+  ctx.fillStyle='#222'; ctx.font=getFont(4,W);
+  ctx.fillText('CLE  '+hrCount+'  HR',sbX+W*0.015,sbY+H*0.07);
+
+  // Uncoupled Right Field Lights 
   [
-    {x:.06, h:H*0.12, strips:8, lRatio:0.65},
-    {x:.30, h:H*0.09, strips:8, lRatio:0.65},
-    {x:.70, h:H*0.09, strips:8, lRatio:0.65},
-    {x:.86, h:H*0.14, strips:3, lRatio:0.20}, 
-    {x:.91, h:H*0.14, strips:3, lRatio:0.20},
-    {x:.96, h:H*0.14, strips:3, lRatio:0.20}
+    {x:.86, h:H*0.14, strips:3}, 
+    {x:.91, h:H*0.14, strips:3},
+    {x:.96, h:H*0.115, strips:3}
   ].forEach(lp=>{
     const lx=W*lp.x;
     const poleBase=bleacherTopY(lp.x); 
     const ly=poleBase-lp.h;
     const pw=Math.max(3, W*0.013); 
+    
+    // Draw Pole
     ctx.fillStyle='#444';
     ctx.fillRect(lx-pw/2, ly, pw, lp.h);
+    
+    // Draw Decoupled Uniform Light Bulbs
     const numStrips=lp.strips;
-    const stripH = (lp.h*lp.lRatio)/numStrips;
+    const stripH = H * 0.009; 
     const stripW = pw-2;
+    const stripGap = H * 0.004; 
+    const topOffset = H * 0.004; 
+    
     ctx.shadowColor='#ffffcc'; ctx.shadowBlur=8; 
     ctx.fillStyle='#ffffee'; 
     for(let i=0;i<numStrips;i++){
-      const sy = ly + 2 + i*(stripH+2);
+      const sy = ly + topOffset + i*(stripH + stripGap);
       ctx.fillRect(lx-stripW/2, sy, stripW, stripH);
     }
     ctx.shadowBlur=0;
@@ -731,7 +744,6 @@ function drawStadium(dt){
   ctx.fill();
   ctx.restore();
 
-  // ── NEW: CONCENTRIC GRASS POLYGON ──
   const cx = plateX;
   const cy = (plateY + s2y) / 2;
   const scale = 0.62; 
@@ -760,8 +772,16 @@ function drawStadium(dt){
 
   ctx.fillStyle='#fff';
   const hpo = W*0.013;
-  ctx.beginPath();ctx.moveTo(plateX,plateY - hpo);ctx.lineTo(plateX+hpo,plateY);
-  ctx.lineTo(plateX+hpo,plateY+hpo);ctx.lineTo(plateX-hpo,plateY+hpo);ctx.lineTo(plateX-hpo,plateY);ctx.closePath();ctx.fill();
+  const shiftY = H*0.008; 
+  const py = plateY - shiftY;
+
+  ctx.beginPath();
+  ctx.moveTo(plateX - hpo, py - hpo); 
+  ctx.lineTo(plateX + hpo, py - hpo); 
+  ctx.lineTo(plateX + hpo, py);       
+  ctx.lineTo(plateX, py + hpo);       
+  ctx.lineTo(plateX - hpo, py);       
+  ctx.closePath();ctx.fill();
 
   const railL_topX = 0; 
   const railL_topY = wall[1].y;
@@ -955,6 +975,7 @@ function showSummary(){
       <div style="font-size:11px;color:${rcol};margin-top:8px;text-shadow:2px 2px 0 #000">${rating}</div>
     </div>
     <button class="big-btn" onclick="resetGame()">PLAY AGAIN</button>
+    <button class="sec-btn" onclick="location.href='https://www.32953.com'">HOME</button>
   `);
 }
 
