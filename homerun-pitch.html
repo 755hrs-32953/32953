@@ -764,12 +764,18 @@ function drawStadium(dt){
 
     const slopeAngle = Math.atan2(bY1 - bY0, x1 - x0);
     const h0 = wallH(x0);
+    const adTotalW = x1 - x0;
     const pad = h0 * 0.10;
+
+    // Icon width capped at 20% of total ad width so it stays small on any screen
+    const iconMaxW = adTotalW * 0.20;
+    const iconNatW = h0 * 0.77;
+    const iconActualW = Math.min(iconNatW, iconMaxW);
 
     // YouTube logo — small, vertical left/right sides (trapezoid like the wall)
     const iconPad = h0 * 0.15;  // inset from top/bottom
-    const iX0 = x0 + pad;       // icon left x
-    const iX1 = x0 + pad + h0 * 0.77; // icon right x — 30% narrower
+    const iX0 = x0 + pad;
+    const iX1 = x0 + pad + iconActualW;
     // Top and bottom edges follow wall slope, inset slightly
     const iTY0 = topY(iX0) + iconPad;
     const iTY1 = topY(iX1) + iconPad;
@@ -822,7 +828,8 @@ function drawStadium(dt){
     ctx.textAlign    = 'center';
     ctx.textBaseline = 'middle';
 
-    let fs = h0 * 0.975;
+    // Start font size as smaller of height-based or width-based estimate
+    let fs = Math.min(h0 * 0.975, availW * 0.28);
     ctx.font = `bold ${fs}px 'Press Start 2P', monospace`;
     while (ctx.measureText('@32953').width > availW * 0.93 && fs > 2) {
       fs -= 0.5;
