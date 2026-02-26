@@ -617,7 +617,6 @@ function drawStadium(dt){
     }
   });
 
-  // TIRE WORLD SCOREBOARD
   const sbBaseY = bleacherTopY(0.50);
   const sbW = W * 0.30;
   const sbH = H * 0.090;
@@ -627,12 +626,10 @@ function drawStadium(dt){
   ctx.fillStyle='#fff'; ctx.fillRect(sbX,sbY,sbW,sbH);
   ctx.strokeStyle='#333'; ctx.lineWidth=2; ctx.strokeRect(sbX,sbY,sbW,sbH);
   
-  // Tire Graphic - Procedural recreation of the logo style
   const tireX = sbX + sbW * 0.82;
   const tireY = sbY + sbH * 0.45;
   const tireR = sbH * 0.35;
   
-  // Speed lines trailing to left
   ctx.strokeStyle='rgba(150,150,150,0.6)'; ctx.lineWidth=1.5;
   for(let i=0; i<3; i++){
     ctx.beginPath();
@@ -641,24 +638,20 @@ function drawStadium(dt){
     ctx.stroke();
   }
 
-  // Tire outer
   ctx.fillStyle='#111'; ctx.beginPath(); ctx.ellipse(tireX, tireY, tireR, tireR, 0, 0, Math.PI*2); ctx.fill();
   
-  // Highlighting and Rim detail
   ctx.strokeStyle='#555'; ctx.lineWidth=2;
   ctx.beginPath(); ctx.arc(tireX, tireY, tireR*0.7, 0, Math.PI*2); ctx.stroke();
   ctx.fillStyle='#888'; ctx.beginPath(); ctx.arc(tireX, tireY, tireR*0.4, 0, Math.PI*2); ctx.fill();
   ctx.fillStyle='#eee'; ctx.beginPath(); ctx.arc(tireX, tireY, tireR*0.15, 0, Math.PI*2); ctx.fill();
 
-  // Typography
-  ctx.fillStyle='#e00'; ctx.font=getFont(7.5,W); // Increased font size
+  ctx.fillStyle='#e00'; ctx.font=getFont(7.5,W);
   ctx.fillText('TIRE WORLD',sbX+W*0.01,sbY+H*0.03);
   ctx.fillStyle='#111'; ctx.font=getFont(4,W);
   ctx.fillText('BEST DEALS',sbX+W*0.015,sbY+H*0.05);
   ctx.fillStyle='#222'; ctx.font=getFont(4,W);
   ctx.fillText('CLE  '+hrCount+'  HR',sbX+W*0.015,sbY+H*0.075);
 
-  // Uncoupled Right Field Lights 
   [
     {x:.86, h:H*0.14, strips:3}, 
     {x:.91, h:H*0.14, strips:3},
@@ -669,11 +662,9 @@ function drawStadium(dt){
     const ly=poleBase-lp.h;
     const pw=Math.max(3, W*0.013); 
     
-    // Draw Pole
     ctx.fillStyle='#444';
     ctx.fillRect(lx-pw/2, ly, pw, lp.h);
     
-    // Draw Decoupled Uniform Light Bulbs
     const numStrips=lp.strips;
     const stripH = H * 0.009; 
     const stripW = pw-2;
@@ -726,6 +717,126 @@ function drawStadium(dt){
     ctx.closePath();ctx.fill();
   }
 
+  // 32953 AD — painted on the green wall face between wall[1] (foul pole) and wall[2]
+  // The wall slopes: top goes H*0.400→H*0.350, bottom goes H*0.480→H*0.430 left to right.
+  // Everything must follow that slope.
+  {
+    const lw1 = wall[1]; // foul pole  x=W*0.04, y=H*0.48, h=H*0.08
+    const lw2 = wall[2]; // left-ctr   x=W*0.28, y=H*0.43, h=H*0.08
+
+    const poleW = Math.max(2, W * 0.009);
+    const x0 = lw1.x + poleW + 1;
+    const x1 = lw2.x;
+
+    // Exact sloped corners of the wall face
+    const tY0 = lw1.y - lw1.h;  // top-left    H*0.400
+    const tY1 = lw2.y - lw2.h;  // top-right   H*0.350
+    const bY0 = lw1.y;           // bottom-left H*0.480
+    const bY1 = lw2.y;           // bottom-right H*0.430
+
+    ctx.save();
+
+    // Clip to the sloped trapezoid
+    ctx.beginPath();
+    ctx.moveTo(x0, tY0);
+    ctx.lineTo(x1, tY1);
+    ctx.lineTo(x1, bY1);
+    ctx.lineTo(x0, bY0);
+    ctx.closePath();
+    ctx.clip();
+
+    // Gold background — fill as the SAME trapezoid path (not a rect)
+    ctx.fillStyle = '#ffd700';
+    ctx.beginPath();
+    ctx.moveTo(x0, tY0);
+    ctx.lineTo(x1, tY1);
+    ctx.lineTo(x1, bY1);
+    ctx.lineTo(x0, bY0);
+    ctx.closePath();
+    ctx.fill();
+
+    // Helper: interpolate y at a given x fraction (0=left, 1=right) along top or bottom edge
+    const frac = (xPos) => (xPos - x0) / (x1 - x0);
+    const topY  = (xPos) => tY0 + frac(xPos) * (tY1 - tY0);
+    const botY  = (xPos) => bY0 + frac(xPos) * (bY1 - bY0);
+    const midY  = (xPos) => (topY(xPos) + botY(xPos)) / 2;
+    const wallH = (xPos) => botY(xPos) - topY(xPos);
+
+    const slopeAngle = Math.atan2(bY1 - bY0, x1 - x0);
+    const h0 = wallH(x0);
+    const pad = h0 * 0.10;
+
+    // YouTube logo — small, vertical left/right sides (trapezoid like the wall)
+    const iconPad = h0 * 0.15;  // inset from top/bottom
+    const iX0 = x0 + pad;       // icon left x
+    const iX1 = x0 + pad + h0 * 0.77; // icon right x — 30% narrower
+    // Top and bottom edges follow wall slope, inset slightly
+    const iTY0 = topY(iX0) + iconPad;
+    const iTY1 = topY(iX1) + iconPad;
+    const iBY0 = botY(iX0) - iconPad;
+    const iBY1 = botY(iX1) - iconPad;
+
+    // Red trapezoid background for icon
+    ctx.fillStyle = '#ff0000';
+    ctx.beginPath();
+    ctx.moveTo(iX0, iTY0);
+    ctx.lineTo(iX1, iTY1);
+    ctx.lineTo(iX1, iBY1);
+    ctx.lineTo(iX0, iBY0);
+    ctx.closePath();
+    ctx.fill();
+
+    // White play triangle — vertical left edge, tip aligned to slope midpoint
+    const iCX = (iX0 + iX1) / 2;
+    const iCY = midY(iCX);
+    const triH = (iBY0 - iTY0) * 0.55 * 0.70;  // 30% smaller
+    const triW = triH * 1.2;
+
+    // Left edge x and y positions (vertical, centered on slope at iCX)
+    const triLeftX = iCX - triW * 0.35;
+    const triRightX = iCX + triW * 0.65;
+    // The tip y must follow the slope midpoint at the right x
+    const triTipY = midY(triRightX);
+    // Top and bottom of left edge follow slope at left x
+    const triTopY = midY(triLeftX) - triH * 0.5;
+    const tribotY = midY(triLeftX) + triH * 0.5;
+
+    ctx.fillStyle = '#ffffff';
+    ctx.beginPath();
+    ctx.moveTo(triLeftX,  triTopY);   // top-left (vertical left edge)
+    ctx.lineTo(triLeftX,  tribotY);   // bottom-left (vertical left edge)
+    ctx.lineTo(triRightX, triTipY);   // tip — slope-corrected midpoint
+    ctx.closePath();
+    ctx.fill();
+
+    // @32953 — large, fills the rest of the wall width
+    const textX0  = iX1 + pad;
+    const textX1  = x1 - pad;
+    const availW  = textX1 - textX0;
+    const textCX  = (textX0 + textX1) / 2;
+    const textCY  = midY(textCX);
+
+    ctx.save();
+    ctx.translate(textCX, textCY);
+    ctx.rotate(slopeAngle);
+    ctx.textAlign    = 'center';
+    ctx.textBaseline = 'middle';
+
+    let fs = h0 * 0.975;
+    ctx.font = `bold ${fs}px 'Press Start 2P', monospace`;
+    while (ctx.measureText('@32953').width > availW * 0.93 && fs > 2) {
+      fs -= 0.5;
+      ctx.font = `bold ${fs}px 'Press Start 2P', monospace`;
+    }
+    ctx.fillStyle = '#1a0a00';
+    ctx.fillText('@32953', 0, 0);
+    ctx.restore();
+
+    ctx.textAlign    = 'left';
+    ctx.textBaseline = 'alphabetic';
+    ctx.restore();
+  }
+
   ctx.strokeStyle='#ffffff';ctx.lineWidth=Math.max(2, W*0.009);
   ctx.beginPath();
   ctx.moveTo(wall[0].x, wall[0].y - wall[0].h);
@@ -733,7 +844,7 @@ function drawStadium(dt){
   ctx.stroke();
 
   ctx.font=getFont(7,W);ctx.textAlign='center';ctx.fillStyle='rgba(255,255,255,.90)';
-  wall.forEach(w2=>{if(w2.ft) ctx.fillText(w2.ft,w2.x,w2.y-w2.h+(H*0.03));});
+  wall.forEach((w2,wi)=>{if(w2.ft && wi!==2 && wi!==3) ctx.fillText(w2.ft,w2.x,w2.y-w2.h+(H*0.03));});
   ctx.textAlign='left';
 
   ctx.fillStyle='#ffff00';
@@ -918,7 +1029,7 @@ function drawStadium(dt){
       ctx.fillStyle='rgba(0,0,0,.80)';ctx.fillRect(0,0,W,H*0.06);
       if(last.r==='hr'){ctx.fillStyle='rgba(255,200,0,.10)';ctx.fillRect(0,0,W,H*0.06);}
       const rcol=last.r==='hr'?C.gold:last.r==='foul'?'#ffaa00':C.green;
-      const rtxt=last.r==='hr'?'HOME RUN!!!':last.r==='foul'?'FOUL BALL!':(last.d > wp.ft ? 'OFF THE WALL' : (last.d > 320 ? 'DEEP FLY BALL' : 'FLY OUT'));
+      const _wp=wallAt(fb.angle||0.5,wall);const rtxt=last.r==='hr'?'HOME RUN!!!':last.r==='foul'?'FOUL BALL!':(last.d > _wp.ft ? 'OFF THE WALL' : (last.d > 320 ? 'DEEP FLY BALL' : 'FLY OUT'));
       ctx.fillStyle=rcol;ctx.font=getFont(9,W);ctx.textAlign='center';
       ctx.fillText(rtxt,W*.38,H*0.038);
       if(last.d>0){ctx.fillStyle='#fff';ctx.font=getFont(8,W);ctx.fillText(last.d+' FT',W*.76,H*0.038);}
