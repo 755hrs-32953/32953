@@ -625,32 +625,84 @@ function drawStadium(dt){
   
   ctx.fillStyle='#fff'; ctx.fillRect(sbX,sbY,sbW,sbH);
   ctx.strokeStyle='#333'; ctx.lineWidth=2; ctx.strokeRect(sbX,sbY,sbW,sbH);
-  
-  const tireX = sbX + sbW * 0.82;
-  const tireY = sbY + sbH * 0.45;
-  const tireR = sbH * 0.35;
-  
-  ctx.strokeStyle='rgba(150,150,150,0.6)'; ctx.lineWidth=1.5;
-  for(let i=0; i<3; i++){
-    ctx.beginPath();
-    ctx.moveTo(tireX - tireR, tireY - tireR*0.6 + i*tireR*0.6);
-    ctx.lineTo(sbX + sbW*0.55, tireY - tireR*0.6 + i*tireR*0.6);
-    ctx.stroke();
-  }
 
-  ctx.fillStyle='#111'; ctx.beginPath(); ctx.ellipse(tireX, tireY, tireR, tireR, 0, 0, Math.PI*2); ctx.fill();
-  
-  ctx.strokeStyle='#555'; ctx.lineWidth=2;
-  ctx.beginPath(); ctx.arc(tireX, tireY, tireR*0.7, 0, Math.PI*2); ctx.stroke();
-  ctx.fillStyle='#888'; ctx.beginPath(); ctx.arc(tireX, tireY, tireR*0.4, 0, Math.PI*2); ctx.fill();
-  ctx.fillStyle='#eee'; ctx.beginPath(); ctx.arc(tireX, tireY, tireR*0.15, 0, Math.PI*2); ctx.fill();
+  // Pixel art Jose Ramirez headshot
+  // Draw on a virtual 32x24 pixel grid mapped to the scoreboard
+  const pw = sbW / 32;
+  const ph = sbH / 24;
+  const px = (c,r,col) => { ctx.fillStyle=col; ctx.fillRect(sbX+c*pw, sbY+r*ph, pw, ph); };
 
-  ctx.fillStyle='#e00'; ctx.font=getFont(7.5,W);
-  ctx.fillText('TIRE WORLD',sbX+W*0.01,sbY+H*0.03);
-  ctx.fillStyle='#111'; ctx.font=getFont(4,W);
-  ctx.fillText('BEST DEALS',sbX+W*0.015,sbY+H*0.05);
+  // Background — white already filled
+  // Neck / jersey
+  const skin = '#8B5E3C', skinDk = '#6B3E1C', red = '#cc1122', blk = '#111111', wht = '#eeeeee', beard = '#1a1a1a', hat = '#cc1122', hatBrim = '#991100', teeth='#f5f5f5';
+
+  // Jersey / shoulders (bottom rows)
+  for(let c=6;c<=25;c++) px(c,21,red);
+  for(let c=4;c<=27;c++) px(c,22,red);
+  for(let c=3;c<=28;c++) px(c,23,red);
+
+  // Neck
+  for(let c=13;c<=18;c++) px(c,19,skin);
+  for(let c=13;c<=18;c++) px(c,20,skin);
+
+  // Head base
+  for(let c=9;c<=22;c++) for(let r=10;r<=18;r++) px(c,r,skin);
+  // Head wider middle
+  for(let c=8;c<=23;c++) for(let r=12;r<=16;r++) px(c,r,skin);
+
+  // Ears
+  px(8,13,skin); px(8,14,skin); px(8,15,skinDk);
+  px(23,13,skin); px(23,14,skin); px(23,15,skinDk);
+
+  // Eyes (dark, slightly apart)
+  for(let c=12;c<=13;c++) px(c,13,blk);
+  for(let c=18;c<=19;c++) px(c,13,blk);
+  // Eye whites
+  px(11,13,'#fff'); px(14,13,'#fff');
+  px(17,13,'#fff'); px(20,13,'#fff');
+
+  // Nose
+  px(15,15,skinDk); px(16,15,skinDk);
+  px(14,16,skinDk); px(17,16,skinDk);
+
+  // Smile / mouth
+  for(let c=13;c<=18;c++) px(c,17,beard);
+  // Teeth
+  for(let c=14;c<=17;c++) px(c,17,teeth);
+  // Lip corners up
+  px(13,17,skinDk); px(18,17,skinDk);
+
+  // Beard / stubble around jaw
+  for(let c=9;c<=22;c++) px(c,18,beard);
+  for(let c=10;c<=21;c++) px(c,19,beard);
+  px(9,17,beard); px(22,17,beard);
+  px(10,16,beard); px(21,16,beard);
+
+  // Hat brim (dark underside)
+  for(let c=7;c<=24;c++) px(c,10,hatBrim);
+  for(let c=6;c<=25;c++) px(c,9,hatBrim);
+
+  // Hat body (red, no logo)
+  for(let c=8;c<=23;c++) for(let r=3;r<=9;r++) px(c,r,hat);
+  for(let c=10;c<=21;c++) px(10,2,hat); for(let c=10;c<=21;c++) px(c,2,hat);
+  for(let c=12;c<=19;c++) px(c,1,hat);
+  // Hat button top
+  px(15,0,blk); px(16,0,blk);
+
+  // Hat shadow under brim on forehead
+  for(let c=9;c<=22;c++) px(c,11,skinDk);
+
+  // Dreadlocks peeking out below hat on sides
+  for(let r=10;r<=14;r++) { px(8,r,'#2a1a0a'); px(9,r,'#2a1a0a'); }
+  for(let r=10;r<=14;r++) { px(22,r,'#2a1a0a'); px(23,r,'#2a1a0a'); }
+  for(let r=15;r<=20;r++) { px(7,r,'#2a1a0a'); }
+  for(let r=15;r<=20;r++) { px(24,r,'#2a1a0a'); }
+
+  // HR counter at bottom right of board
   ctx.fillStyle='#222'; ctx.font=getFont(4,W);
-  ctx.fillText('CLE  '+hrCount+'  HR',sbX+W*0.015,sbY+H*0.075);
+  ctx.textAlign='right';
+  ctx.fillText('HR: '+hrCount, sbX+sbW-W*0.01, sbY+sbH-H*0.008);
+  ctx.textAlign='left';
 
   [
     {x:.86, h:H*0.14, strips:3}, 
@@ -773,7 +825,7 @@ function drawStadium(dt){
     const iconActualW = Math.min(iconNatW, iconMaxW);
 
     // YouTube logo — small, vertical left/right sides (trapezoid like the wall)
-    const iconPad = h0 * 0.15;  // inset from top/bottom
+    const iconPad = h0 * 0.28;  // larger inset = shorter box = more square
     const iX0 = x0 + pad;
     const iX1 = x0 + pad + iconActualW;
     // Top and bottom edges follow wall slope, inset slightly
@@ -830,10 +882,10 @@ function drawStadium(dt){
 
     // Start font size as smaller of height-based or width-based estimate
     let fs = Math.min(h0 * 0.975, availW * 0.28);
-    ctx.font = `bold ${fs}px 'Press Start 2P', monospace`;
+    ctx.font = `900 ${fs}px Arial Black, Impact, sans-serif`;
     while (ctx.measureText('@32953').width > availW * 0.93 && fs > 2) {
       fs -= 0.5;
-      ctx.font = `bold ${fs}px 'Press Start 2P', monospace`;
+      ctx.font = `900 ${fs}px Arial Black, Impact, sans-serif`;
     }
     ctx.fillStyle = '#1a0a00';
     ctx.fillText('@32953', 0, 0);
