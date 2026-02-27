@@ -219,49 +219,6 @@
     z-index:50;
   }
 
-  /* Initials overlay */
-  #ini-overlay {
-    display:none;
-    position:fixed; inset:0;
-    background:rgba(0,0,0,0.88);
-    align-items:center; justify-content:center;
-    flex-direction:column;
-    z-index:200;
-    font-family:'Press Start 2P',monospace;
-  }
-  #ini-overlay.show { display:flex; }
-  #ini-overlay h2 {
-    color:var(--c64-yellow);
-    font-size:clamp(8px,3vw,11px);
-    letter-spacing:3px;
-    margin-bottom:10px;
-    text-align:center;
-    padding:0 16px;
-  }
-  #ini-overlay p {
-    color:#b8a8ff;
-    font-size:clamp(5px,2vw,7px);
-    letter-spacing:2px;
-    margin-bottom:16px;
-  }
-  #ini-input {
-    background:#111; border:2px solid var(--c64-yellow);
-    color:var(--c64-yellow);
-    font-family:'Press Start 2P',monospace;
-    font-size:clamp(16px,5vw,22px);
-    text-align:center; width:90px;
-    letter-spacing:10px; padding:8px;
-    text-transform:uppercase; outline:none;
-  }
-  #ini-ok {
-    margin-top:16px; padding:10px 28px;
-    background:#111; border:2px solid var(--c64-yellow);
-    color:var(--c64-yellow);
-    font-family:'Press Start 2P',monospace;
-    font-size:clamp(7px,2.5vw,9px);
-    letter-spacing:3px; cursor:pointer;
-  }
-
   @keyframes blink { 0%,49%{opacity:1} 50%,100%{opacity:.3} }
 </style>
 </head>
@@ -297,14 +254,6 @@
 
 </div>
 
-<!-- Initials prompt overlay -->
-<div id="ini-overlay">
-  <h2>ENTER YOUR<br>3 INITIALS</h2>
-  <p>FOR THE DAILY LEADERBOARD</p>
-  <input id="ini-input" maxlength="3" autocomplete="off"
-    autocorrect="off" autocapitalize="characters" spellcheck="false"/>
-  <button id="ini-ok">CONFIRM</button>
-</div>
 
 <script>
 // ── Clock ────────────────────────────────────────────────────────────────────
@@ -930,24 +879,6 @@ window.addEventListener('resize',buildGrid);
 <script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-database-compat.js"></script>
 <script src="scores.js"></script>
 <script>
-// ── Initials prompt (one-time on first visit) ─────────────────────────────────
-function maybePromptInitials(onDone){
-  if(getInitials()){ onDone(); return; }
-  const overlay=document.getElementById('ini-overlay');
-  const input=document.getElementById('ini-input');
-  overlay.classList.add('show');
-  input.focus();
-  function confirm(){
-    const v=input.value.toUpperCase().replace(/[^A-Z0-9]/g,'').slice(0,3);
-    if(!v.length) return;
-    saveInitials(v);
-    overlay.classList.remove('show');
-    onDone();
-  }
-  document.getElementById('ini-ok').addEventListener('click',confirm);
-  input.addEventListener('keydown',e=>{ if(e.key==='Enter') confirm(); });
-}
-
 // ── Load scores + leaderboard ─────────────────────────────────────────────────
 async function loadHubScores(){
   try {
@@ -990,8 +921,8 @@ async function loadHubLeaderboard(){
   }).join('');
 }
 
-// On load: prompt for initials if needed, then load scores
-maybePromptInitials(()=>{ loadHubScores(); });
+// Load scores on page open
+loadHubScores();
 </script>
 </body>
 </html>

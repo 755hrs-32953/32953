@@ -130,12 +130,68 @@ async function fetchLeaderboard() {
   return Array.isArray(val) ? val : Object.values(val);
 }
 
-// ── Submit score silently from a game page ───────────────────────────────────
-// Just call this at the end of any game. No overlay, no initials prompt.
-// The leaderboard lives only on the hub page.
+// ── Initials prompt overlay ───────────────────────────────────────────────────
+// Shown only when a player cracks the top 10 for the first time.
+function promptInitialsOverlay(total) {
+  return new Promise(resolve => {
+    const overlay = document.createElement('div');
+    overlay.style.cssText = `
+      position:fixed;inset:0;background:rgba(0,0,0,0.88);
+      display:flex;flex-direction:column;align-items:center;
+      justify-content:center;z-index:9999;
+      font-family:'Press Start 2P',monospace;
+    `;
+    overlay.innerHTML = `
+      <div style="color:#ffff54;font-size:clamp(8px,3vw,11px);letter-spacing:3px;
+                  margin-bottom:10px;text-align:center;padding:0 16px;">
+        YOU MADE THE<br>LEADERBOARD!
+      </div>
+      <div style="color:#b8a8ff;font-size:clamp(5px,2vw,7px);letter-spacing:2px;
+                  margin-bottom:16px;">
+        ENTER YOUR 3 INITIALS
+      </div>
+      <input id="_ini_input" maxlength="3" autocomplete="off"
+        autocorrect="off" autocapitalize="characters" spellcheck="false"
+        style="background:#111;border:2px solid #ffff54;color:#ffff54;
+               font-family:'Press Start 2P',monospace;font-size:clamp(16px,5vw,22px);
+               text-align:center;width:90px;letter-spacing:10px;
+               padding:8px;text-transform:uppercase;outline:none;"/>
+      <button id="_ini_ok"
+        style="margin-top:16px;padding:10px 28px;background:#111;
+               border:2px solid #ffff54;color:#ffff54;cursor:pointer;
+               font-family:'Press Start 2P',monospace;font-size:clamp(7px,2.5vw,9px);
+               letter-spacing:3px;">
+        CONFIRM
+      </button>
+    `;
+    document.body.appendChild(overlay);
+    const input = overlay.querySelector('#_ini_input');
+    const btn   = overlay.querySelector('#_ini_ok');
+    input.focus();
+    async function confirm() {
+      const v = input.value.toUpperCase().replace(/[^A-Z0-9]/g,'').slice(0,3);
+      if (!v.length) return;
+      saveInitials(v);
+      // Update leaderboard entry with real initials
+      const pid = getPlayerID();
+      await checkLeaderboard(todayKey(), pid, total, v);
+      overlay.remove();
+      resolve(v);
+    }
+    btn.addEventListener('click', confirm);
+    input.addEventListener('keydown', e => { if (e.key === 'Enter') confirm(); });
+  });
+}
+
+// ── Submit score from a game page ─────────────────────────────────────────────
+// Silently submits. If the player cracks the top 10 and has no initials yet,
+// prompts for them on the spot.
 async function showScoreScreen(gameId, score) {
   try {
-    await submitScore(gameId, score);
+    const result = await submitScore(gameId, score);
+    if (result.madeLeaderboard && !getInitials()) {
+      await promptInitialsOverlay(result.newTotal);
+    }
   } catch(e) {
     console.warn('Score submit failed:', e);
   }
