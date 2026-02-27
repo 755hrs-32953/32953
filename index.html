@@ -217,6 +217,31 @@
 
   @keyframes blink { 0%,49%{opacity:1} 50%,100%{opacity:.3} }
   @keyframes pulse { 0%,100%{opacity:1} 50%{opacity:.7} }
+
+  #leaderboard {
+    background:var(--c64-dark);
+    border-top:4px solid var(--c64-purple);
+    padding:8px 16px 10px;
+    flex-shrink:0;
+  }
+  #lb-title {
+    font-size:clamp(5px,1.2vw,7px);
+    color:var(--c64-cyan);
+    letter-spacing:3px;
+    margin-bottom:6px;
+    text-align:center;
+  }
+  .lb-row {
+    display:flex;
+    justify-content:space-between;
+    font-size:clamp(4px,1.0vw,6px);
+    color:#b8a8ff;
+    letter-spacing:1px;
+    margin:2px 0;
+    line-height:1.6;
+  }
+  .lb-row.me { color:var(--c64-yellow); }
+  .lb-row.empty { color:#444; justify-content:center; }
 </style>
 </head>
 <body>
@@ -257,19 +282,19 @@ const nd = new Date();
 document.getElementById('day-label').textContent =
   nd.toLocaleDateString('en-US',{weekday:'short',month:'short',day:'numeric'}).toUpperCase();
 
-// Games data
+// Games data — id must match filename without .html
 const GAMES = [
-  {name:'LUNAR\nLANDER',  loc:'CAPE CANAVERAL', url:'lunar-lander.html', active:true,  score:0, iconFn:'iconLunarLander'},
-  {name:'STONE\nCOLD',    loc:'CALGARY, CANADA', url:'stone-cold.html',   active:true,  score:0, iconFn:'iconCurling'},
-  {name:'FAIR\nWAY',      loc:'PEBBLE BEACH',    url:'fairway.html',      active:true,  score:0, iconFn:'iconGolf'},
-  {name:'DOWN\nTOWN',     loc:'32953 ARENA',     url:'downtown.html',     active:true,  score:0, iconFn:'iconBasketball'},
-  {name:'SPLASH',      loc:'OLYMPIC POOL',    url:'splash.html',       active:true,  score:0, iconFn:'iconSwim'},
-  {name:'HOMERUN\nPITCH', loc:'PROGRESSIVE FLD', url:'homerun-pitch.html',active:true,  score:0, iconFn:'iconBaseball'},
-  {name:'ASTEROID\nRUN',  loc:'DEEP SPACE',      url:'#',                 active:false, score:0, iconFn:'iconAsteroid'},
-  {name:'JUNGLE\nRUN',    loc:'AMAZON',          url:'#',                 active:false, score:0, iconFn:'iconJungle'},
-  {name:'DOGFIGHT',       loc:'ENGLISH CH.',     url:'#',                 active:false, score:0, iconFn:'iconPlane'},
-  {name:'GOLD\nRUSH',     loc:'YUKON',           url:'#',                 active:false, score:0, iconFn:'iconGold'},
-  {name:'DEEP\nDIVE',     loc:'MARIANA',         url:'#',                 active:false, score:0, iconFn:'iconDiver'},
+  {name:'LUNAR\nLANDER',  id:'lunar-lander',   loc:'CAPE CANAVERAL', url:'lunar-lander.html', active:true,  score:0, iconFn:'iconLunarLander'},
+  {name:'STONE\nCOLD',    id:'stone-cold',      loc:'CALGARY, CANADA',url:'stone-cold.html',   active:true,  score:0, iconFn:'iconCurling'},
+  {name:'FAIR\nWAY',      id:'fairway',         loc:'PEBBLE BEACH',   url:'fairway.html',      active:true,  score:0, iconFn:'iconGolf'},
+  {name:'DOWN\nTOWN',     id:'downtown',        loc:'32953 ARENA',    url:'downtown.html',     active:true,  score:0, iconFn:'iconBasketball'},
+  {name:'SPLASH',          id:'splash',          loc:'OLYMPIC POOL',   url:'splash.html',       active:true,  score:0, iconFn:'iconSwim'},
+  {name:'HOMERUN\nPITCH', id:'homerun-pitch',   loc:'PROGRESSIVE FLD',url:'homerun-pitch.html',active:true,  score:0, iconFn:'iconBaseball'},
+  {name:'ASTEROID\nRUN',  id:'asteroid-run',    loc:'DEEP SPACE',     url:'#',                 active:false, score:0, iconFn:'iconAsteroid'},
+  {name:'JUNGLE\nRUN',    id:'jungle-run',      loc:'AMAZON',         url:'#',                 active:false, score:0, iconFn:'iconJungle'},
+  {name:'DOGFIGHT',        id:'dogfight',        loc:'ENGLISH CH.',    url:'#',                 active:false, score:0, iconFn:'iconPlane'},
+  {name:'GOLD\nRUSH',     id:'gold-rush',       loc:'YUKON',          url:'#',                 active:false, score:0, iconFn:'iconGold'},
+  {name:'DEEP\nDIVE',     id:'deep-dive',       loc:'MARIANA',        url:'#',                 active:false, score:0, iconFn:'iconDiver'},
 ];
 
 // ─────────────────────────────────────────────
@@ -894,6 +919,54 @@ function updateTotal() {
 
 buildGrid();
 window.addEventListener('resize', buildGrid);
+</script>
+
+<!-- Firebase loaded after page renders so icons appear immediately -->
+<script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-app-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-database-compat.js"></script>
+<script src="scores.js"></script>
+<script>
+async function loadHubScores() {
+  try {
+    const myScores = await loadMyScores();
+    GAMES.forEach((g, i) => {
+      if (g.active && myScores[g.id]) {
+        g.score = myScores[g.id];
+        const el = document.getElementById('score-' + i);
+        if (el) el.textContent = formatScore(g.score);
+      }
+    });
+    updateTotal();
+    await loadHubLeaderboard();
+  } catch(e) {
+    console.warn('Firebase load failed:', e);
+    document.getElementById('lb-rows').innerHTML =
+      '<div class="lb-row empty">SCORES UNAVAILABLE</div>';
+  }
+}
+
+async function loadHubLeaderboard() {
+  const board  = await fetchLeaderboard();
+  const pid    = getPlayerID();
+  const lbRows = document.getElementById('lb-rows');
+  if (!board || board.length === 0) {
+    lbRows.innerHTML = '<div class="lb-row empty">NO SCORES YET TODAY</div>';
+    return;
+  }
+  lbRows.innerHTML = board.map((e, i) => {
+    const isMe  = e.pid === pid;
+    const ini   = (e.initials || '???').toUpperCase().padEnd(3, '\u00a0');
+    const pts   = String(e.total).padStart(6, '0');
+    const rank  = String(i + 1).padStart(2, '0');
+    const arrow = isMe ? '\u25b6 ' : '\u00a0\u00a0';
+    return `<div class="lb-row${isMe ? ' me' : ''}">
+              <span>${arrow}${rank}. ${ini}</span>
+              <span>${pts} PTS</span>
+            </div>`;
+  }).join('');
+}
+
+loadHubScores();
 </script>
 </body>
 </html>

@@ -1162,8 +1162,11 @@ function showSummary(){
       <div style="font-size:11px;color:${rcol};margin-top:8px;text-shadow:2px 2px 0 #000">${rating}</div>
     </div>
     <button class="big-btn" onclick="resetGame()">PLAY AGAIN</button>
-    <button class="sec-btn" onclick="location.href='https://www.32953.com'">HOME</button>
   `);
+  // Submit to Firebase leaderboard — score = total HR distance in feet
+  if(typeof showScoreScreen === 'function'){
+    showScoreScreen('homerun-pitch', totalDist, ()=>{ location.href='https://www.32953.com'; });
+  }
 }
 
 function resetGame(){
@@ -1244,5 +1247,8 @@ function drawIdle(){
 
 resize();lastTime=performance.now();requestAnimationFrame(loop);showStart();
 </script>
+  <script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-app-compat.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-database-compat.js"></script>
+  <script src="scores.js"></script>
 </body>
 </html>
