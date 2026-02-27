@@ -111,7 +111,7 @@ async function submitScore(gameId, newScore) {
 
   await playerRef.set(data);
 
-  const madeLeaderboard = await checkLeaderboard(today, pid, data.total, data.initials);
+  const madeLeaderboard = await checkLeaderboard(today, pid, data.total, getInitials());
   return { updated: true, newTotal: data.total, madeLeaderboard };
 }
 
@@ -125,8 +125,9 @@ async function checkLeaderboard(today, pid, total, initials) {
   // Remove any existing entry for this player
   board = board.filter(e => e.pid !== pid);
 
-  // Add updated entry
-  board.push({ pid, initials: initials || '???', total });
+  // Add updated entry — prefer saved initials over whatever was passed in
+  const bestInitials = getInitials() || initials || '???';
+  board.push({ pid, initials: bestInitials, total });
 
   // Sort descending, keep top 10
   board.sort((a, b) => b.total - a.total);
