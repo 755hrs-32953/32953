@@ -33,7 +33,22 @@ const GAME_IDS = [
   'gold-rush'
 ];
 
-// ── Boot Firebase (CDN compat build — no npm needed) ──────────────────────────
+// ── Daily reset ───────────────────────────────────────────────────────────────
+// At midnight UTC the leaderboard resets. Clear localStorage so initials
+// and player ID are fresh — players can choose new initials each day.
+(function dailyReset() {
+  const today = new Date().toISOString().slice(0, 10);
+  const stored = localStorage.getItem('32953_date');
+  if (stored !== today) {
+    localStorage.removeItem('32953_initials');
+    // Keep the player ID so their scores still link up if they've
+    // already submitted today, but clear initials so they're re-prompted
+    // if they make the leaderboard again.
+    localStorage.setItem('32953_date', today);
+  }
+})();
+
+
 firebase.initializeApp(FIREBASE_CONFIG);
 const DB = firebase.database();
 

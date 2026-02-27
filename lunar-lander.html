@@ -634,9 +634,17 @@ function showResult(success, spd, fp, angle) {
   ov.appendChild(flyBtn);
   ov.appendChild(diffBtn);
   ov.appendChild(homeBtn);
+
+  // Submit to Firebase — only successful landings score
+  if(typeof showScoreScreen === 'function'){
+    showScoreScreen('lunar-lander', score);
+  }
 }
 
 resize();
 </script>
+  <script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-app-compat.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-database-compat.js"></script>
+  <script src="scores.js"></script>
 </body>
 </html>
