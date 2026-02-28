@@ -37,7 +37,7 @@ const GAME_IDS = [
 // At midnight UTC the leaderboard resets. Clear localStorage so initials
 // and player ID are fresh — players can choose new initials each day.
 (function dailyReset() {
-  const today = new Date().toISOString().slice(0, 10);
+  const today = new Date().toLocaleDateString('en-CA', { timeZone: 'America/Los_Angeles' });
   const stored = localStorage.getItem('32953_date');
   if (stored !== today) {
     localStorage.removeItem('32953_initials');
@@ -72,9 +72,11 @@ function saveInitials(ini) {
   localStorage.setItem('32953_initials', ini.toUpperCase().slice(0, 3));
 }
 
-// ── Date key (UTC so midnight is consistent worldwide) ────────────────────────
+// ── Date key (resets at midnight Pacific — 3am Eastern, safest dead zone) ────
 function todayKey() {
-  return new Date().toISOString().slice(0, 10); // "2026-02-27"
+  return new Date().toLocaleDateString('en-CA', {
+    timeZone: 'America/Los_Angeles'
+  }); // "2026-02-27"
 }
 
 // ── Read today's scores for this player ───────────────────────────────────────
