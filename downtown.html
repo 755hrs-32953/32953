@@ -309,7 +309,7 @@ function showStart() {
       &nbsp;<br>
       5 spots &bull; 2 shots each<br>
       spot 5 = <span>DOUBLE POINTS</span><br>
-      max score: <span>12 PTS</span>
+      max score: <span>3600 PTS</span>
     </div>
     <button class="big-btn" onclick="startGame()">SHOOT IT</button>
   `);
@@ -447,10 +447,10 @@ function onShotLanded(made) {
   shotHistory.push({ spotIdx, shotIdx: shotInSpot, made });
   totalShots++;
   const dbl = spotIdx === 4;
-  if (made) { makes++; score += dbl ? 2 : 1; }
+  if (made) { makes++; score += dbl ? 600 : 300; }
   updateBot();
 
-  flashMsg   = made ? (dbl ? 'FROM DOWNTOWN! +2' : 'GOOD! +1') : 'NO GOOD';
+  flashMsg   = made ? (dbl ? 'FROM DOWNTOWN! +600' : 'GOOD! +300') : 'NO GOOD';
   flashColor = made ? (dbl ? C.yellow : C.green) : C.red;
   flashUntil = Date.now() + 1000;
 
@@ -489,27 +489,31 @@ function showResult() {
   draw();
 
   let grade;
-  if (score >= 12)      grade = 'PERFECT GAME!';
-  else if (score >= 9)  grade = 'ON FIRE!';
-  else if (score >= 6)  grade = 'MONEY PLAYER';
-  else if (score >= 4)  grade = 'SOLID EFFORT';
-  else                  grade = 'BACK TO GYM';
+  if (score >= 3600)     grade = 'PERFECT GAME!';
+  else if (score >= 2700) grade = 'ON FIRE!';
+  else if (score >= 1800) grade = 'MONEY PLAYER';
+  else if (score >= 900)  grade = 'SOLID EFFORT';
+  else                    grade = 'BACK TO GYM';
 
   const pct = totalShots > 0 ? Math.round(makes / totalShots * 100) : 0;
-  const dbl = shotHistory.filter(h => h.spotIdx === 4 && h.made).length * 2;
-  const col = score >= 8 ? C.yellow : C.cyan;
+  const dblMakes = shotHistory.filter(h => h.spotIdx === 4 && h.made).length;
+  const col = score >= 2400 ? C.yellow : C.cyan;
 
   showOverlay(`
     <div id="ov-result" style="color:${col};text-shadow:2px 2px 0 #4a3fa0">${grade}</div>
     <div id="ov-breakdown">
       SHOTS MADE: ${makes} / 10<br>
       FIELD GOAL: ${pct}%<br>
-      SPOT 5 (2X): ${dbl} PTS
+      SPOT 5 (2X): ${dblMakes * 600} PTS
     </div>
-    <div id="ov-score-big">SCORE: ${score} / 12</div>
+    <div id="ov-score-big">SCORE: ${score} / 3600</div>
     <button class="big-btn" onclick="restartGame()">SHOOT AGAIN</button>
     <button class="small-btn" onclick="window.location.href='index.html'">&#9664; HOME</button>
   `);
+  // Submit to Firebase
+  if(typeof showScoreScreen === 'function'){
+    showScoreScreen('downtown', score);
+  }
 }
 
 function restartGame() {
@@ -1127,5 +1131,8 @@ buildCrowd();
 draw();
 showStart();
 </script>
+  <script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-app-compat.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-database-compat.js"></script>
+  <script src="scores.js"></script>
 </body>
 </html>
