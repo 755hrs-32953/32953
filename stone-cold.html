@@ -1123,6 +1123,11 @@ function showFinalResult(scoring){
   homeBtn.textContent='◀ HOME'; homeBtn.onclick=()=>window.location.href='index.html';
 
   ov.appendChild(playBtn); ov.appendChild(homeBtn);
+
+  // Submit to Firebase — score is total across all 3 levels
+  if(typeof showScoreScreen === 'function'){
+    showScoreScreen('stone-cold', totalScore);
+  }
 }
 
 // ── START SCREEN ──────────────────────────────────────────
@@ -1187,5 +1192,8 @@ function advanceLevel(){
 // ── BOOT ──────────────────────────────────────────────────
 resize(); buildSheet(); showStart();
 </script>
+  <script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-app-compat.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-database-compat.js"></script>
+  <script src="scores.js"></script>
 </body>
 </html>
