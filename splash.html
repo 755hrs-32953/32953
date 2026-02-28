@@ -442,12 +442,26 @@ function showResult() {
     const ft = sw.finishTime>0 ? sw.finishTime.toFixed(2)+'s' : '--';
     return `${sw.isPlayer?'▶ ':'  '}${pstrs[i]} ${sw.col.name.padEnd(6)} ${ft}`;
   }).join('<br>');
+  // ── Scoring: 10pts per 0.01s below 55.00, +1000 for WR ──────────────────
+  const THRESHOLD = 55.00;
+  let gameScore = 0;
+  if (player.finishTime > 0 && player.finishTime < THRESHOLD) {
+    const hundredths = Math.round((THRESHOLD - player.finishTime) * 100);
+    gameScore = hundredths * 10;
+    if (player.finishTime <= WR) gameScore += 1000;
+  }
+
   showOverlay(`
     <div id="ov-result" style="color:${medalColor};text-shadow:2px 2px 0 #4a3fa0">${medalLabel}</div>
-    <div id="ov-breakdown">YOUR PLACE: ${pstrs[rank-1]}<br>YOUR TIME: ${t}s<br>WR: 51.71s<br>&nbsp;<br>${rows}</div>
+    <div id="ov-breakdown">YOUR PLACE: ${pstrs[rank-1]}<br>YOUR TIME: ${t}s<br>WR: 51.71s<br>SCORE: ${gameScore} PTS<br>&nbsp;<br>${rows}</div>
     <button class="big-btn" onclick="startGame()">RACE AGAIN</button>
     <button class="small-btn" onclick="window.location.href='index.html'">&#9664; HOME</button>
   `);
+
+  // Submit to Firebase
+  if(typeof showScoreScreen === 'function'){
+    showScoreScreen('splash', gameScore);
+  }
 }
 
 // ── DRAW ───────────────────────────────────────────────────
@@ -1018,5 +1032,8 @@ function drawFlash(g) {
 // ── BOOT ───────────────────────────────────────────────────
 resize(); draw(); showStart();
 </script>
+  <script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-app-compat.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-database-compat.js"></script>
+  <script src="scores.js"></script>
 </body>
 </html>
