@@ -96,15 +96,18 @@
   </div>
   <div id="botbar">
     <div id="bot-date"></div>
-    <div id="bot-level">HOLE 1/3</div>
+    <div id="bot-level">HOLE 1/5</div>
     <div id="bot-score">TOTAL: 0</div>
   </div>
 </div>
 
-<script>
-// ── iOS height fix ──────────────────────────────────────────
-// Height handled by CSS (100% / 100vh), no JS override needed
+<!-- Firebase -->
+<script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-app-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-database-compat.js"></script>
+<!-- Shared scores library -->
+<script src="scores.js"></script>
 
+<script>
 const nd = new Date();
 document.getElementById('bot-date').textContent =
   nd.toLocaleDateString('en-US',{month:'short',day:'numeric'}).toUpperCase();
@@ -131,16 +134,16 @@ function seededRand(seed) {
   return ()=>{ s=(Math.imul(1664525,s)+1013904223)>>>0; return s/0xffffffff; };
 }
 
-// ── DAILY HIGH SCORE ────────────────────────────────────────
-function getDailyKey() {
-  const d = new Date();
-  return `fairway_hi_${d.getFullYear()}${String(d.getMonth()+1).padStart(2,'0')}${String(d.getDate()).padStart(2,'0')}`;
-}
-function getDailyHigh() {
-  try { return parseInt(localStorage.getItem(getDailyKey())||'0',10); } catch(e){ return 0; }
-}
-function saveDailyHigh(score) {
-  try { const p=getDailyHigh(); if(score>p) localStorage.setItem(getDailyKey(),score); } catch(e){}
+// ── FIREBASE DAILY BEST ─────────────────────────────────────
+let myDailyBest = 0;
+
+async function refreshMyDailyBest() {
+  try {
+    const scores = await loadMyScores();
+    myDailyBest = scores['fairway'] || 0;
+  } catch(e) {
+    myDailyBest = 0;
+  }
 }
 
 // ── COLORS ──────────────────────────────────────────────────
@@ -177,50 +180,44 @@ const CLUBS = [
 ];
 
 // ── SCORING ─────────────────────────────────────────────────
-const SCORE_HIO    = 5000;
-const SCORE_BIRDIE = 2000;
-const SCORE_PAR    = 1000;
-const PROX_MAX     = 800;  // max proximity bonus (smooth scale, full green = 0)
+const SCORE_HIO    = 1000;
+const SCORE_BIRDIE = 600;
+const SCORE_PAR    = 250;
+const PROX_MAX     = 800;
 
 // ── GAME STATE ───────────────────────────────────────────────
 let currentHole = 1;
 let totalScore  = 0;
-let holeScore   = 0;   // points earned this hole
+let holeScore   = 0;
 let strokeCount = 0;
-let selectedClub = 0;  // index into CLUBS
-let phase = 'start';   // start | club | aim | shot | putting | hole_out | result
+let selectedClub = 0;
+let phase = 'start';
 let frameCount = 0;
 let animId;
 
-// Ball state
 let ball = { x:0, y:0, vx:0, vy:0, flying:false, landed:false };
 let ballTrail = [];
 let cameraX = 0, cameraY = 0;
 let cameraTargetX = 0, cameraTargetY = 0;
 
-// ── ZOOM STATE ────────────────────────────────────────────────
-let currentZoom   = 1.0;   // actual zoom applied this frame
-let targetZoom    = 1.0;   // zoom we're animating toward
-let zoomCx        = 0;     // world-space center of zoom (green center)
+let currentZoom   = 1.0;
+let targetZoom    = 1.0;
+let zoomCx        = 0;
 let zoomCy        = 0;
-const ZOOM_SPEED  = 0.07;  // lerp factor per frame (smooth ease-out)
+const ZOOM_SPEED  = 0.07;
 
-// Drag state
 let dragStart = null, dragCurrent = null;
-let aimOutFrac = 0;  // current output power fraction, read by drawHUD for bar
+let aimOutFrac = 0;
 
-// Hole data (generated per hole)
 let hole = {};
 
-// Drive proximity (yards from pin after tee shot)
 let driveProximityYards = null;
-let teeShot = true; // true = next shot is from tee
+let teeShot = true;
 
-// ── GOLFER APPEARANCE (daily seeded) ────────────────────────
 let golferAppearance = {};
 function generateGolfer() {
   const r = seededRand(getDailySeed() + 9999);
-  const handed   = r() > 0.5 ? 'right' : 'left';
+  const handed    = r() > 0.5 ? 'right' : 'left';
   const gender    = r() > 0.5 ? 'male' : 'female';
   const ethIdx    = Math.floor(r() * 5);
   const skinTones = ['#f5c89a','#e8a870','#c87840','#a05828','#703818'];
@@ -242,68 +239,54 @@ function generateGolfer() {
 function generateHole(holeNum) {
   const r = seededRand(getDailySeed() + holeNum * 7777);
 
-  // Yardage: short/medium/long ranges assigned by hole number,
-  // order shuffled daily by seed so it's not always short→long
-  const ranges = [[130,155],[156,180],[181,200]];
+  const ranges = [[110,130], [131,150], [151,170], [171,190], [191,215]];
   const order = (() => {
     const ro = seededRand(getDailySeed() + 8888);
-    const arr = [0,1,2];
-    // Fisher-Yates shuffle
-    for (let i=2;i>0;i--){ const j=Math.floor(ro()*(i+1)); [arr[i],arr[j]]=[arr[j],arr[i]]; }
+    const arr = [0,1,2,3,4];
+    for (let i=4;i>0;i--){ const j=Math.floor(ro()*(i+1)); [arr[i],arr[j]]=[arr[j],arr[i]]; }
     return arr;
   })();
   const [rMin, rMax] = ranges[order[holeNum - 1]];
   const yards = rMin + Math.floor(r() * (rMax - rMin + 1));
 
-  // Wind: speed daily-seeded, direction changes per hole
   const windSpeedR = seededRand(getDailySeed() + 5555);
-  const windSpeed  = 2 + windSpeedR() * 8; // 2-10 mph
-  const windDir    = r() * Math.PI * 2;    // per-hole direction
+  const windSpeed  = 2 + windSpeedR() * 8;
+  const windDir    = r() * Math.PI * 2;
 
-  // Layout in canvas coords (set after resize)
   return { yards, windSpeed, windDir, holeNum };
 }
 
-// ── LAYOUT: build hole geometry from canvas size ─────────────
 function buildHoleLayout(h) {
   const W = canvas.width, H = canvas.height;
   const cx = W * 0.5;
 
-  // Tee at bottom, pin at top area
   const teeY   = H * 0.82;
   const teeX   = cx;
   const pinY   = H * 0.13;
   const pinX   = cx + (seededRand(getDailySeed() + h.holeNum*1111)() - 0.5) * W * 0.25;
 
-  // Fairway width scales with hole length
   const fwWidth = W * 0.45 + (h.yards - 130) / 70 * W * 0.1;
 
-  // Green: irregular blob — generate control points
-  const greenR = W * 0.17;  // base radius (~25yd real green)
+  const greenR = W * 0.17;
   const gr = seededRand(getDailySeed() + h.holeNum * 4444);
   const blobPts = 8;
   const greenBlob = [];
   for (let i = 0; i < blobPts; i++) {
     const ang = (i / blobPts) * Math.PI * 2;
-    // Vary radius per point: 60%-140% of base, seeded
     const rMult = 0.6 + gr() * 0.8;
-    // Squish one axis for kidney/teardrop feel
     const rx = greenR * rMult * (0.8 + gr() * 0.4);
     const ry = greenR * rMult * (0.7 + gr() * 0.5);
     greenBlob.push({ ang, rx, ry });
   }
 
-  // Cup offset from green center — seeded, stays inside green
   const cupOffsetAng = gr() * Math.PI * 2;
   const cupOffsetDist = greenR * 0.25 + gr() * greenR * 0.25;
   const cupX = pinX + Math.cos(cupOffsetAng) * cupOffsetDist;
   const cupY = pinY + Math.sin(cupOffsetAng) * cupOffsetDist;
 
-  // Green slope: a 2D vector representing uphill direction (seeded per hole)
   const slopeAng = gr() * Math.PI * 2;
-  const slopeMag = 0.0008 + gr() * 0.0012; // subtle break on putts
+  const slopeMag = 0.0008 + gr() * 0.0012;
 
-  // Yards -> pixels scale
   const totalPx = teeY - pinY;
   const pxPerYard = totalPx / h.yards;
 
@@ -318,7 +301,6 @@ function buildHoleLayout(h) {
   h.slopeMag = slopeMag;
   h.pxPerYard = pxPerYard;
 
-  // OB boundary
   h.obLeft  = W * 0.05;
   h.obRight = W * 0.95;
   h.obTop   = H * 0.02;
@@ -327,10 +309,8 @@ function buildHoleLayout(h) {
   return h;
 }
 
-// ── GREEN BLOB HIT TEST ──────────────────────────────────────
 function isOnGreen(x, y, h) {
   if (!h.greenBlob) return Math.hypot(x - h.pinX, y - h.pinY) < h.greenR;
-  // Ray-cast point-in-polygon on blob
   const pts = h.greenBlob.map(p => ({
     x: h.pinX + Math.cos(p.ang) * p.rx,
     y: h.pinY + Math.sin(p.ang) * p.ry,
@@ -344,24 +324,17 @@ function isOnGreen(x, y, h) {
   return inside;
 }
 
-// ── TERRAIN CHECK ────────────────────────────────────────────
 function getTerrainAt(x, y, h) {
-  const dPin   = Math.hypot(x - h.pinX, y - h.pinY);
-  const dTee   = Math.hypot(x - h.teeX, y - h.teeY);
-
   if (isOnGreen(x, y, h)) return 'green';
+  const dTee = Math.hypot(x - h.teeX, y - h.teeY);
   if (dTee < h.greenR * 0.8) return 'tee';
 
-  // Fairway corridor
   const t = Math.max(0, Math.min(1, (y - h.pinY) / (h.teeY - h.pinY)));
   const fwCx = h.teeX + (h.pinX - h.teeX) * (1 - t);
   const fwHW  = h.fwWidth * 0.5 * (0.8 + 0.2 * t);
 
   if (Math.abs(x - fwCx) < fwHW) return 'fairway';
-
-  // OB
   if (x < h.obLeft || x > h.obRight || y < h.obTop || y > h.obBottom) return 'ob';
-
   return 'rough';
 }
 
@@ -369,7 +342,6 @@ function isOB(x, y, h) {
   return x < h.obLeft || x > h.obRight || y < h.obTop || y > h.obBottom;
 }
 
-// ── TREES (decorative, seeded) ───────────────────────────────
 let trees = [];
 function generateTrees(h) {
   const r = seededRand(getDailySeed() + h.holeNum * 3131);
@@ -395,14 +367,10 @@ function draw() {
   const W = canvas.width, H = canvas.height;
   ctx.clearRect(0, 0, W, H);
 
-  // Lerp zoom toward target
   currentZoom += (targetZoom - currentZoom) * ZOOM_SPEED;
 
-  // Apply zoom transform centered on zoomCx/zoomCy (green center in world space)
-  // All world drawing happens inside this transform
   ctx.save();
   if (Math.abs(currentZoom - 1.0) > 0.001) {
-    // Translate so zoom center maps to canvas center
     ctx.translate(W * 0.5, H * 0.5);
     ctx.scale(currentZoom, currentZoom);
     ctx.translate(-zoomCx, -zoomCy);
@@ -418,8 +386,7 @@ function draw() {
   if (phase === 'aim' || phase === 'putting') drawAimGuide();
   if (phase === 'shot') drawFlight();
 
-  ctx.restore(); // back to unzoomed for HUD
-
+  ctx.restore();
   drawHUD();
 }
 
@@ -427,15 +394,12 @@ function drawTerrain() {
   const W = canvas.width, H = canvas.height;
   const h = hole;
 
-  // Sky / rough background
   ctx.fillStyle = C.rough;
   ctx.fillRect(0, 0, W, H);
 
-  // Scanlines
   ctx.fillStyle = 'rgba(0,0,0,0.06)';
   for (let y = 0; y < H; y += 4) ctx.fillRect(0, y, W, 2);
 
-  // Fairway corridor
   const steps = 60;
   for (let i = 0; i < steps; i++) {
     const t0 = i / steps, t1 = (i+1) / steps;
@@ -445,7 +409,6 @@ function drawTerrain() {
     const cx1 = h.teeX + (h.pinX - h.teeX) * (1 - t1);
     const hw0 = h.fwWidth * 0.5 * (0.8 + 0.2 * t0);
     const hw1 = h.fwWidth * 0.5 * (0.8 + 0.2 * t1);
-    // Alternate stripes for classic look
     ctx.fillStyle = i % 2 === 0 ? C.fairway : C.fairwayL;
     ctx.beginPath();
     ctx.moveTo(cx0 - hw0, y0);
@@ -456,7 +419,6 @@ function drawTerrain() {
     ctx.fill();
   }
 
-  // Tee box
   ctx.fillStyle = C.teeBox;
   ctx.beginPath();
   ctx.ellipse(h.teeX, h.teeY, h.greenR * 0.75, h.greenR * 0.45, 0, 0, Math.PI*2);
@@ -464,15 +426,13 @@ function drawTerrain() {
   ctx.strokeStyle = '#44aa44'; ctx.lineWidth = 2;
   ctx.stroke();
 
-  // Green — irregular blob with slope shading and contour lines
   if (h.greenBlob) {
     const pts = h.greenBlob.map(p => ({
       x: h.pinX + Math.cos(p.ang) * p.rx,
       y: h.pinY + Math.sin(p.ang) * p.ry,
     }));
 
-    // Build smooth blob path (catmull-rom via midpoints)
-    function blobPath(scale) {
+    function blobPath() {
       ctx.beginPath();
       const n = pts.length;
       for (let i = 0; i < n; i++) {
@@ -486,11 +446,9 @@ function drawTerrain() {
       ctx.closePath();
     }
 
-    // Base fill
-    blobPath(1);
+    blobPath();
     ctx.fillStyle = C.green; ctx.fill();
 
-    // Slope shading — lighter on downhill side, darker on uphill
     const slX = Math.cos(h.slopeAng), slY = Math.sin(h.slopeAng);
     const grad = ctx.createLinearGradient(
       h.pinX - slX * h.greenR * 1.2, h.pinY - slY * h.greenR * 1.2,
@@ -499,25 +457,23 @@ function drawTerrain() {
     grad.addColorStop(0, 'rgba(255,255,255,0.12)');
     grad.addColorStop(0.5, 'rgba(0,0,0,0)');
     grad.addColorStop(1, 'rgba(0,0,0,0.18)');
-    blobPath(1);
+    blobPath();
     ctx.fillStyle = grad; ctx.fill();
 
-    // Contour rings — 2 rings at 35% and 65% scale showing slope
     [0.38, 0.68].forEach(scale => {
       ctx.save();
       ctx.translate(h.pinX + slX * h.greenR * (1-scale) * 0.15,
                     h.pinY + slY * h.greenR * (1-scale) * 0.15);
       ctx.scale(scale, scale);
       ctx.translate(-h.pinX, -h.pinY);
-      blobPath(scale);
+      blobPath();
       ctx.restore();
       ctx.strokeStyle = 'rgba(80,200,80,0.35)'; ctx.lineWidth = 1;
       ctx.stroke();
     });
 
-    // Stripe overlay (mow lines)
     ctx.save();
-    blobPath(1); ctx.clip();
+    blobPath(); ctx.clip();
     ctx.strokeStyle = 'rgba(80,200,80,0.18)'; ctx.lineWidth = 3;
     for (let sy = h.pinY - h.greenR*2; sy < h.pinY + h.greenR*2; sy += 7) {
       ctx.beginPath(); ctx.moveTo(h.pinX - h.greenR*2, sy);
@@ -525,39 +481,30 @@ function drawTerrain() {
     }
     ctx.restore();
 
-    // Outline
-    blobPath(1);
+    blobPath();
     ctx.strokeStyle = '#33bb33'; ctx.lineWidth = 2; ctx.stroke();
 
-    // Slope arrow — large bold arrow pointing downhill, with SLOPE label
     const arrowR = h.greenR * 0.55;
     const ax = h.pinX + slX * arrowR, ay = h.pinY + slY * arrowR;
     ctx.save();
     ctx.translate(ax, ay);
     ctx.rotate(h.slopeAng);
-    // Arrow shaft
     ctx.strokeStyle = 'rgba(255,220,0,0.90)'; ctx.lineWidth = 4;
     ctx.lineCap = 'round';
     ctx.beginPath(); ctx.moveTo(0, -14); ctx.lineTo(0, 10); ctx.stroke();
-    // Arrowhead (downhill direction = positive, so arrow points down = +y)
     ctx.beginPath();
-    ctx.moveTo(0, 18);
-    ctx.lineTo(-8, 6);
-    ctx.lineTo(8, 6);
+    ctx.moveTo(0, 18); ctx.lineTo(-8, 6); ctx.lineTo(8, 6);
     ctx.closePath();
     ctx.fillStyle = 'rgba(255,220,0,0.90)'; ctx.fill();
-    // Glow outline
     ctx.strokeStyle = 'rgba(0,0,0,0.5)'; ctx.lineWidth = 1.5;
     ctx.stroke();
     ctx.restore();
-    // SLOPE label next to arrow
     ctx.fillStyle = 'rgba(255,220,0,0.85)';
     ctx.font = `10px 'Press Start 2P'`;
     ctx.textAlign = 'center';
     ctx.fillText('SLOPE', ax + slY * 22, ay - slX * 22);
   }
 
-  // OB markers (small red posts)
   ctx.fillStyle = '#ff5454';
   const obPosts = [
     [h.obLeft + 4, h.pinY], [h.obLeft + 4, h.pinY + (h.teeY-h.pinY)*0.5], [h.obLeft + 4, h.teeY],
@@ -572,20 +519,16 @@ function drawTerrain() {
 
 function drawTrees() {
   trees.forEach(t => {
-    // Shadow
     ctx.beginPath(); ctx.ellipse(t.x+3, t.y+4, t.r*0.7, t.r*0.3, 0, 0, Math.PI*2);
     ctx.fillStyle = 'rgba(0,0,0,0.25)'; ctx.fill();
-    // Trunk
     ctx.fillStyle = C.treeTrunk;
     ctx.fillRect(t.x - 2, t.y, 4, t.r * 0.6);
-    // Canopy layers
     ctx.beginPath(); ctx.arc(t.x, t.y - t.r * 0.3, t.r, 0, Math.PI*2);
     ctx.fillStyle = t.col; ctx.fill();
     ctx.beginPath(); ctx.arc(t.x - t.r*0.3, t.y, t.r*0.7, 0, Math.PI*2);
     ctx.fillStyle = t.col; ctx.fill();
     ctx.beginPath(); ctx.arc(t.x + t.r*0.3, t.y, t.r*0.7, 0, Math.PI*2);
     ctx.fillStyle = t.col; ctx.fill();
-    // Highlight
     ctx.beginPath(); ctx.arc(t.x - t.r*0.2, t.y - t.r*0.4, t.r*0.3, 0, Math.PI*2);
     ctx.fillStyle = 'rgba(84,255,84,0.3)'; ctx.fill();
   });
@@ -595,17 +538,12 @@ function drawHole() {
   const h = hole;
   const cx = h.cupX || h.pinX;
   const cy = h.cupY || h.pinY;
-  // Flag pole from cup
   ctx.strokeStyle = C.pole; ctx.lineWidth = 2;
   ctx.beginPath(); ctx.moveTo(cx, cy); ctx.lineTo(cx, cy - 22); ctx.stroke();
-  // Flag
   ctx.fillStyle = C.flag;
   ctx.beginPath();
-  ctx.moveTo(cx, cy - 22);
-  ctx.lineTo(cx + 12, cy - 17);
-  ctx.lineTo(cx, cy - 12);
+  ctx.moveTo(cx, cy - 22); ctx.lineTo(cx + 12, cy - 17); ctx.lineTo(cx, cy - 12);
   ctx.closePath(); ctx.fill();
-  // Cup
   ctx.beginPath(); ctx.arc(cx, cy, 4, 0, Math.PI*2);
   ctx.fillStyle = '#1a1a1a'; ctx.fill();
   ctx.strokeStyle = '#666'; ctx.lineWidth = 1; ctx.stroke();
@@ -622,7 +560,6 @@ function drawBallTrail() {
 
 function drawBall() {
   if (phase === 'start' || phase === 'club' || phase === 'aim') {
-    // Ball sitting at current position
     const bx = Math.round(ball.x), by = Math.round(ball.y);
     ctx.beginPath(); ctx.arc(bx+1, by+1, 5, 0, Math.PI*2);
     ctx.fillStyle = 'rgba(0,0,0,0.3)'; ctx.fill();
@@ -643,11 +580,8 @@ function drawBall() {
   }
 }
 
-// ── GOLFER PIXEL ART ─────────────────────────────────────────
 function drawGolfer() {
-  if (phase === 'shot' || phase === 'hole_out') return;
-  // During putting, move golfer to the side so cup is visible
-  if (phase === 'putting') return;
+  if (phase === 'shot' || phase === 'hole_out' || phase === 'putting') return;
   const g = golferAppearance;
   if (!g.skin) return;
   const gx = Math.round(ball.x) + (g.handed === 'right' ? -14 : 14);
@@ -658,45 +592,32 @@ function drawGolfer() {
   ctx.translate(gx, gy);
   ctx.scale(flip, 1);
 
-  // Shadow
   ctx.beginPath(); ctx.ellipse(8, 4, 10, 4, 0, 0, Math.PI*2);
   ctx.fillStyle = 'rgba(0,0,0,0.25)'; ctx.fill();
 
-  // Legs
   ctx.fillStyle = g.pants;
   ctx.fillRect(2, -8, 5, 12);
   ctx.fillRect(8, -8, 5, 12);
 
-  // Shoes
   ctx.fillStyle = '#222';
   ctx.fillRect(1, 3, 7, 3);
   ctx.fillRect(7, 3, 7, 3);
 
-  // Body / shirt
   ctx.fillStyle = g.shirt;
   ctx.fillRect(0, -20, 15, 13);
 
-  // Arms in address position
   ctx.fillStyle = g.skin;
-  ctx.fillRect(-3, -18, 4, 10); // lead arm extended
-  ctx.fillRect(14, -16, 4, 8);  // trail arm
+  ctx.fillRect(-3, -18, 4, 10);
+  ctx.fillRect(14, -16, 4, 8);
 
-  // Club shaft
   ctx.strokeStyle = '#aaaaaa'; ctx.lineWidth = 2;
-  ctx.beginPath();
-  ctx.moveTo(-3, -8);
-  ctx.lineTo(-8, 8);
-  ctx.stroke();
-  // Club head
+  ctx.beginPath(); ctx.moveTo(-3, -8); ctx.lineTo(-8, 8); ctx.stroke();
   ctx.fillStyle = '#888888';
   ctx.fillRect(-10, 6, 6, 4);
 
-  // Head
   ctx.fillStyle = g.skin;
-  ctx.beginPath(); ctx.arc(7, -26, 7, 0, Math.PI*2);
-  ctx.fill();
+  ctx.beginPath(); ctx.arc(7, -26, 7, 0, Math.PI*2); ctx.fill();
 
-  // Hair
   if (g.gender === 'female') {
     ctx.fillStyle = g.hair;
     ctx.fillRect(1, -33, 12, 6);
@@ -707,7 +628,6 @@ function drawGolfer() {
     ctx.fillRect(2, -33, 10, 5);
   }
 
-  // Hat
   if (g.hasHat) {
     ctx.fillStyle = g.hatCol;
     ctx.fillRect(0, -35, 14, 4);
@@ -719,7 +639,6 @@ function drawGolfer() {
   ctx.restore();
 }
 
-// ── CLUB MENU ────────────────────────────────────────────────
 function drawClubMenu() {
   const W = canvas.width, H = canvas.height;
   const menuW = W * 0.85, menuH = 44;
@@ -734,7 +653,6 @@ function drawClubMenu() {
   ctx.textAlign = 'center';
   ctx.fillText('SELECT CLUB', mx, my - menuH/2 + 4);
 
-  // Club buttons (4 tee clubs only, no putter in club menu)
   const clubs = CLUBS.slice(0, 4);
   const btnW = menuW / clubs.length - 4;
   clubs.forEach((cl, i) => {
@@ -751,16 +669,12 @@ function drawClubMenu() {
   });
 }
 
-// ── AIM GUIDE ────────────────────────────────────────────────
-// ── PUTT POWER CURVE ─────────────────────────────────────────
-// Maps raw drag fraction (0-1) to output power fraction (0-1)
-// Lower third = precision zone (0→10%), upper two thirds = quadratic ramp (10→100%)
 function puttPowerCurve(rawFrac) {
   if (rawFrac < 1/3) {
-    return rawFrac * 0.3;                          // 0-33% drag → 0-10% power (linear, precise)
+    return rawFrac * 0.3;
   } else {
-    const t = (rawFrac - 1/3) / (2/3);            // normalize upper zone to 0-1
-    return 0.1 + 0.9 * t * t;                     // quadratic ramp 10→100%
+    const t = (rawFrac - 1/3) / (2/3);
+    return 0.1 + 0.9 * t * t;
   }
 }
 
@@ -769,7 +683,6 @@ function drawAimGuide() {
   const cl = CLUBS[selectedClub];
   const maxPx = cl.maxYards * h.pxPerYard;
 
-  // Stone at ball position
   if (!dragStart || !dragCurrent) {
     ctx.fillStyle = 'rgba(60,40,120,0.82)';
     const dtw = canvas.width * 0.65, dth = 18;
@@ -784,20 +697,15 @@ function drawAimGuide() {
   const rawDist = Math.min(Math.hypot(dx, dy), maxPx * 0.6);
   const isPutt = phase === 'putting';
 
-  // For putting: apply non-linear curve to raw drag → output power
-  // For irons: linear (rawFrac maps directly to power)
   const rawFrac = rawDist / (maxPx * 0.6);
   const outFrac = isPutt ? puttPowerCurve(rawFrac) : rawFrac;
   const power   = outFrac * (maxPx * 0.6);
 
-  // Minimum threshold: 4px raw drag for putts, 6px for irons
   if (rawDist < (isPutt ? 4 : 6)) return;
 
   const angle = Math.atan2(dy, dx);
   const windAng = hole.windDir;
   const windStr = hole.windSpeed * 0.00015;
-
-  // Aim preview: short arc for fairway shots, full path for putts
   const friction     = isPutt ? 0.955 : 0.985;
   const previewSteps = isPutt ? 80 : 32;
 
@@ -810,7 +718,6 @@ function drawAimGuide() {
     if (!isPutt) {
       svx += Math.cos(windAng) * windStr * Math.abs(svy);
     } else {
-      // Slope nudge in preview
       const spd = Math.hypot(svx, svy);
       svx += Math.cos(hole.slopeAng) * hole.slopeMag * spd;
       svy += Math.sin(hole.slopeAng) * hole.slopeMag * spd;
@@ -829,7 +736,6 @@ function drawAimGuide() {
     if (Math.hypot(svx, svy) < 0.05) break;
   }
 
-  // Blinking X at end of preview arc
   if (frameCount % 20 < 13) {
     ctx.fillStyle = isPutt ? '#54ffff' : '#ffff54';
     ctx.font = `bold 14px 'Press Start 2P'`;
@@ -837,49 +743,35 @@ function drawAimGuide() {
     ctx.fillText('X', lastX, lastY + 5);
   }
 
-  // Store power fraction for drawHUD to render in screen space (outside zoom)
   aimOutFrac = outFrac;
 }
 
-// ── FLIGHT ANIMATION ─────────────────────────────────────────
-let flightFrames = 0;
-function drawFlight() {
-  // Ball already moved by update(), just draw
-}
+function drawFlight() {}
 
-// ── HUD ──────────────────────────────────────────────────────
 function drawHUD() {
   const W = canvas.width, H = canvas.height, h = hole;
   if (!h.yards) return;
 
-  // Top info bar
   ctx.fillStyle = 'rgba(10,5,40,0.85)';
   ctx.fillRect(0, 0, W, 32);
   ctx.strokeStyle = '#4a3fa0'; ctx.lineWidth = 2;
   ctx.beginPath(); ctx.moveTo(0,32); ctx.lineTo(W,32); ctx.stroke();
 
-  // Distance to cup — world coords, unaffected by zoom transform
   const cx2 = h.cupX || h.pinX, cy2 = h.cupY || h.pinY;
   const distPx  = Math.hypot(ball.x - cx2, ball.y - cy2);
   const distYds = Math.round(distPx / h.pxPerYard);
-  // On green: show feet (more meaningful for putting)
   const onGreen = phase === 'putting' || (phase === 'shot' && isOnGreen(ball.x, ball.y, h));
-  const distLabel = onGreen
-    ? `${Math.round(distYds * 3)}FT`   // yards → feet
-    : `${distYds}YD`;
+  const distLabel = onGreen ? `${Math.round(distYds * 3)}FT` : `${distYds}YD`;
   ctx.fillStyle = '#54ffff'; ctx.font = `10px 'Press Start 2P'`; ctx.textAlign = 'left';
   ctx.fillText(distLabel, 8, 21);
 
-  // Stroke count
   ctx.fillStyle = '#ffff54'; ctx.textAlign = 'center';
   ctx.fillText(`STROKE ${strokeCount+1}`, W*0.5, 21);
 
-  // Wind
   const windSpd = Math.round(h.windSpeed);
   ctx.fillStyle = '#54ff54'; ctx.textAlign = 'right';
   ctx.fillText(`${windSpd}MPH`, W - 8, 21);
 
-  // Wind arrow
   const arrowX = W - 52, arrowY = 16;
   ctx.save();
   ctx.translate(arrowX, arrowY);
@@ -890,16 +782,13 @@ function drawHUD() {
   ctx.fillStyle = '#54ff54'; ctx.fill();
   ctx.restore();
 
-  // Club name + power bar — fixed screen position, unaffected by zoom
   if (phase === 'aim' || phase === 'putting') {
     const cl = CLUBS[selectedClub];
-    // Club name strip at bottom
     ctx.fillStyle = 'rgba(10,5,40,0.85)';
     ctx.fillRect(0, H - 32, W, 32);
     ctx.fillStyle = cl.color; ctx.font = `10px 'Press Start 2P'`; ctx.textAlign = 'center';
     ctx.fillText(cl.name, W * 0.5, H - 10);
 
-    // Power bar — always fixed at bottom of screen in screen space
     if (dragStart && dragCurrent && aimOutFrac > 0) {
       const barX = W * 0.15;
       const barY = H - 52;
@@ -908,10 +797,8 @@ function drawHUD() {
       ctx.fillRect(barX, barY, barTotalW, 12);
       ctx.fillStyle = aimOutFrac > 0.8 ? '#ff5454' : aimOutFrac > 0.5 ? '#ffff54' : '#54ff54';
       ctx.fillRect(barX, barY, aimOutFrac * barTotalW, 12);
-      // Border
       ctx.strokeStyle = 'rgba(255,255,255,0.3)'; ctx.lineWidth = 1;
       ctx.strokeRect(barX, barY, barTotalW, 12);
-      // Percentage label
       ctx.fillStyle = '#fff'; ctx.font = `10px 'Press Start 2P'`; ctx.textAlign = 'right';
       ctx.fillText(Math.round(aimOutFrac * 100) + '%', barX + barTotalW - 2, barY + 10);
     }
@@ -925,8 +812,6 @@ function getCanvasPos(e) {
   const src = e.touches ? e.touches[0] : e;
   const screenX = (src.clientX - rect.left) * sx;
   const screenY = (src.clientY - rect.top)  * sy;
-  // Unproject screen coords to world coords through zoom transform
-  // world = (screen - canvasCenter) / zoom + zoomCenter
   if (Math.abs(currentZoom - 1.0) > 0.001) {
     const W = canvas.width, H = canvas.height;
     const wx = (screenX - W * 0.5) / currentZoom + zoomCx;
@@ -948,7 +833,6 @@ function onDown(e) {
   const p = getCanvasPos(e);
 
   if (phase === 'club') {
-    // Hit a club button?
     const W = canvas.width, H = canvas.height;
     const menuW = W * 0.85;
     const mx = W * 0.5, my = H * 0.88;
@@ -988,11 +872,9 @@ function onUp(e) {
   const isPutt = phase === 'putting';
   const rawDist = Math.min(Math.hypot(dx, dy), maxPx * 0.6);
 
-  // Lower minimum threshold for putting so tiny taps fire
   const minDist = isPutt ? 3 : 8;
   if (rawDist < minDist) { dragStart = null; dragCurrent = null; return; }
 
-  // Apply non-linear curve for putting, linear for irons
   const rawFrac = rawDist / (maxPx * 0.6);
   const outFrac = isPutt ? puttPowerCurve(rawFrac) : rawFrac;
   const power   = outFrac * (maxPx * 0.6);
@@ -1011,9 +893,7 @@ function onUp(e) {
 }
 
 // ── PHYSICS / UPDATE ─────────────────────────────────────────
-// Ball has two modes: 'flight' (full speed, wind affects) and 'roll' (slowed,
-// terrain friction, slope on green). Aim guide only shows flight arc.
-let ballMode = 'flight';  // 'flight' | 'roll'
+let ballMode = 'flight';
 
 function update() {
   frameCount++;
@@ -1022,29 +902,21 @@ function update() {
   const h = hole;
   const isPutting = selectedClub === 4;
 
-  // Choose friction based on mode and surface
-  // Irons: 0.9928 flight friction gives realistic 2-4s travel time
-  // Roll-out: terrain-based, lower friction = shorter roll
   let friction;
   if (isPutting) {
-    friction = 0.955;  // smooth green, ~1.5s travel time
+    friction = 0.955;
   } else if (ballMode === 'flight') {
-    friction = 0.985;  // air drag — linear distance response, ~4s flight
+    friction = 0.985;
   } else {
     const t = getTerrainAt(ball.x, ball.y, h);
     friction = t === 'green'   ? 0.92 :
                t === 'fairway' ? 0.86 :
-               t === 'tee'     ? 0.88 :
-                                 0.72;  // rough kills roll fast
+               t === 'tee'     ? 0.88 : 0.72;
   }
 
   const windStr = (isPutting || ballMode === 'roll') ? 0 : h.windSpeed * 0.00012;
-
-  // Wind (flight only)
   ball.vx += Math.cos(h.windDir) * windStr * Math.abs(ball.vy);
 
-  // Slope effect on green — speed-proportional so fast ball curves more,
-  // slow ball barely affected; self-limiting, can't roll off from slope alone
   if (isOnGreen(ball.x, ball.y, h) || isPutting) {
     const spd = Math.hypot(ball.vx, ball.vy);
     ball.vx += Math.cos(h.slopeAng) * h.slopeMag * spd;
@@ -1061,7 +933,6 @@ function update() {
 
   const spd = Math.hypot(ball.vx, ball.vy);
 
-  // OB check
   if (isOB(ball.x, ball.y, h)) {
     zoomOut();
     setTimeout(() => showHoleResult('ob'), 400);
@@ -1069,25 +940,20 @@ function update() {
     return;
   }
 
-  // Transition from flight to roll when ball slows to near-stop speed
-  // At this point it "lands" and rolls out on terrain
   if (ballMode === 'flight' && !isPutting && spd < 0.15) {
     ballMode = 'roll';
-    // Ball lands — flatten and roll in current direction
     ball.vy *= 0.3;
     ball.vx *= 0.8;
   }
 
-  // Stopped?
   if (spd < 0.04) {
     ball.vx = 0; ball.vy = 0;
-    ballMode = 'flight'; // reset for next shot
+    ballMode = 'flight';
 
     const terrain = getTerrainAt(ball.x, ball.y, h);
     const cx = h.cupX || h.pinX;
     const cy = h.cupY || h.pinY;
 
-    // Holed out? Check distance to cup
     const distToCup = Math.hypot(ball.x - cx, ball.y - cy);
     if (distToCup < 6) {
       const result = strokeCount === 1 ? 'hio' : strokeCount === 2 ? 'birdie' : strokeCount === 3 ? 'par' : 'bogey';
@@ -1097,7 +963,6 @@ function update() {
       return;
     }
 
-    // Landed on green — switch to putting and zoom in
     if (terrain === 'green') {
       selectedClub = 4;
       phase = 'putting';
@@ -1106,25 +971,21 @@ function update() {
         driveProximityYards = Math.round(distToPin / h.pxPerYard * 3);
         teeShot = false;
       }
-      // Trigger zoom: fit green snugly in canvas with margin
       zoomToGreen();
       return;
     }
 
-    // Rolled off green while putting — stay in putting mode
     if (isPutting) {
       phase = 'putting';
       return;
     }
 
-    // Record drive proximity on tee shot
     if (teeShot) {
       const distToPin = Math.hypot(ball.x - (h.cupX||h.pinX), ball.y - (h.cupY||h.pinY));
       driveProximityYards = Math.round(distToPin / h.pxPerYard);
       teeShot = false;
     }
 
-    // Max strokes = 5 (bogey+ = 0 pts)
     if (strokeCount >= 5) {
       phase = 'hole_out';
       zoomOut();
@@ -1132,7 +993,6 @@ function update() {
       return;
     }
 
-    // Next shot
     phase = 'club';
     const distToPin2 = Math.hypot(ball.x - (h.cupX||h.pinX), ball.y - (h.cupY||h.pinY));
     selectedClub = suggestClub(distToPin2, h);
@@ -1147,19 +1007,15 @@ function suggestClub(distPx, h) {
   return 3;
 }
 
-// ── ZOOM HELPERS ─────────────────────────────────────────────
 function zoomToGreen() {
   const h = hole;
   const W = canvas.width, H = canvas.height;
-  // Center zoom on green center (pinX/pinY)
   zoomCx = h.pinX;
   zoomCy = h.pinY;
-  // Calculate zoom so green (with margin) fills the canvas
-  // Largest blob extent ≈ greenR * 1.5 (blobs can extend up to 140%)
   const greenExtent = h.greenR * 1.6;
   const zoomX = (W * 0.5) / greenExtent;
   const zoomY = (H * 0.45) / greenExtent;
-  targetZoom = Math.min(zoomX, zoomY, 4.0);  // cap at 4x
+  targetZoom = Math.min(zoomX, zoomY, 4.0);
 }
 
 function zoomOut() {
@@ -1172,14 +1028,10 @@ function showHoleResult(result) {
   const ov = document.getElementById('overlay');
   ov.innerHTML = ''; ov.style.display = 'flex';
 
-  // Calculate score
-  let pts = 0;
-  let proxBonus = 0;
+  let pts = 0, proxBonus = 0;
   let resultText = '', resultColor = '';
 
-  if (result === 'ob') {
-    resultText = 'NO SCORE'; resultColor = '#ff5454'; pts = 0;
-  } else if (result === 'bogey') {
+  if (result === 'ob' || result === 'bogey') {
     resultText = 'NO SCORE'; resultColor = '#ff5454'; pts = 0;
   } else if (result === 'par') {
     resultText = 'PAR'; resultColor = '#54ffff'; pts = SCORE_PAR;
@@ -1189,9 +1041,8 @@ function showHoleResult(result) {
     resultText = 'HOLE IN ONE!!!'; resultColor = '#ffff54'; pts = SCORE_HIO;
   }
 
-  // Proximity bonus (only on par or better, based on drive landing)
   if ((result === 'par' || result === 'birdie' || result === 'hio') && driveProximityYards !== null) {
-    const maxRange = hole.yards * 0.4; // max yards for full bonus window
+    const maxRange = hole.yards * 0.4;
     const pct = Math.max(0, 1 - driveProximityYards / maxRange);
     proxBonus = Math.round(pct * PROX_MAX);
     pts += proxBonus;
@@ -1203,7 +1054,7 @@ function showHoleResult(result) {
 
   const lbl = document.createElement('div');
   lbl.style.cssText = 'font-size:10px;color:#b8a8ff;letter-spacing:2px;margin-bottom:2px;';
-  lbl.textContent = `HOLE ${currentHole} OF 3`;
+  lbl.textContent = `HOLE ${currentHole} OF 5`;
 
   const res = document.createElement('div'); res.id = 'ov-result';
   res.style.color = resultColor;
@@ -1213,7 +1064,7 @@ function showHoleResult(result) {
 
   const bd = document.createElement('div'); bd.id = 'ov-breakdown';
   let breakdown = (result === 'ob') ? 'OUT OF BOUNDS' :
-                  (result === 'bogey') ? `${strokeCount} STROKES` : 
+                  (result === 'bogey') ? `${strokeCount} STROKES` :
                   `${strokeCount} STROKE${strokeCount>1?'S':''}`;
   if (driveProximityYards !== null && result !== 'ob' && result !== 'bogey') {
     breakdown += `<br>DRIVE: ${driveProximityYards}YD FROM PIN`;
@@ -1228,15 +1079,14 @@ function showHoleResult(result) {
   totalEl.style.cssText = 'font-size:13px;color:#54ffff;letter-spacing:2px;margin:2px 0;';
   totalEl.textContent = `TOTAL: ${totalScore}`;
 
-  const dh = getDailyHigh();
   const hiEl = document.createElement('div');
   hiEl.style.cssText = 'font-size:10px;color:#b8a8ff;letter-spacing:1px;';
-  hiEl.textContent = dh > 0 ? `TODAY\'S BEST: ${dh}` : 'NO SCORE YET TODAY';
+  hiEl.textContent = myDailyBest > 0 ? `TODAY\'S BEST: ${myDailyBest}` : 'NO SCORE YET TODAY';
 
   ov.appendChild(lbl); ov.appendChild(res); ov.appendChild(bd);
   ov.appendChild(sc); ov.appendChild(totalEl); ov.appendChild(hiEl);
 
-  if (currentHole < 3) {
+  if (currentHole < 5) {
     const nextBtn = document.createElement('button'); nextBtn.className = 'big-btn';
     nextBtn.textContent = 'NEXT HOLE ▶'; nextBtn.onclick = () => advanceHole();
     const restartBtn = document.createElement('button'); restartBtn.className = 'small-btn';
@@ -1246,16 +1096,9 @@ function showHoleResult(result) {
     homeBtn.textContent = '◀ HOME'; homeBtn.onclick = () => window.location.href = 'index.html';
     ov.appendChild(nextBtn); ov.appendChild(restartBtn); ov.appendChild(homeBtn);
   } else {
-    // Final hole
-    saveDailyHigh(totalScore);
-    const finalDh = getDailyHigh();
-    const isNew = totalScore >= finalDh && totalScore > 0;
-    if (isNew) {
-      const newHi = document.createElement('div');
-      newHi.style.cssText = 'font-size:10px;color:#ffff54;letter-spacing:2px;animation:blink 1s infinite;';
-      newHi.textContent = '★ NEW DAILY BEST! ★';
-      ov.appendChild(newHi);
-    }
+    // Final hole — submit to Firebase
+    submitToFirebase(totalScore, hiEl);
+
     const playBtn = document.createElement('button'); playBtn.className = 'big-btn';
     playBtn.textContent = 'PLAY AGAIN'; playBtn.onclick = () => initGame(true);
     const homeBtn = document.createElement('button'); homeBtn.className = 'small-btn';
@@ -1265,9 +1108,32 @@ function showHoleResult(result) {
   }
 }
 
+// ── FIREBASE SUBMISSION ───────────────────────────────────────
+async function submitToFirebase(score, hiEl) {
+  try {
+    const result = await submitScore('fairway', score);
+    await refreshMyDailyBest();
+    if (hiEl) {
+      const isNew = result.updated && score >= myDailyBest;
+      if (isNew) {
+        hiEl.style.color = '#ffff54';
+        hiEl.style.animation = 'blink 1s infinite';
+        hiEl.textContent = `★ NEW BEST: ${score} ★`;
+      } else {
+        hiEl.textContent = myDailyBest > 0 ? `TODAY'S BEST: ${myDailyBest}` : `SCORE: ${score}`;
+      }
+    }
+    if (result.madeLeaderboard && !getInitials()) {
+      await promptInitialsOverlay(result.newTotal);
+    }
+  } catch(e) {
+    console.warn('Score submit failed:', e);
+  }
+}
+
 // ── BOTTOM BAR ───────────────────────────────────────────────
 function updateBottomBar() {
-  document.getElementById('bot-level').textContent = `HOLE ${currentHole}/3`;
+  document.getElementById('bot-level').textContent = `HOLE ${currentHole}/5`;
   document.getElementById('bot-score').textContent = `TOTAL: ${totalScore}`;
 }
 
@@ -1337,12 +1203,11 @@ function showStart() {
   sub.textContent = '32953.COM · GAME 03';
 
   const rules = document.createElement('div'); rules.className = 'ov-rule';
-  rules.innerHTML = `3 PAR-3 HOLES · DAILY PUZZLE<br><span>BIRDIE</span> = 2000 &nbsp;<span>PAR</span> = 1000<br><span>HOLE IN ONE</span> = 5000<br>OUT OF BOUNDS = 0`;
+  rules.innerHTML = `5 PAR-3 HOLES · DAILY PUZZLE<br><span>BIRDIE</span> = 600 &nbsp;<span>PAR</span> = 250<br><span>HOLE IN ONE</span> = 1000<br>OUT OF BOUNDS = 0`;
 
-  const dh = getDailyHigh();
   const hiEl = document.createElement('div');
   hiEl.style.cssText = 'font-size:10px;color:#ffff54;letter-spacing:1px;';
-  hiEl.textContent = dh > 0 ? `TODAY'S BEST: ${dh}` : 'NO SCORE YET TODAY';
+  hiEl.textContent = myDailyBest > 0 ? `TODAY'S BEST: ${myDailyBest}` : 'NO SCORE YET TODAY';
 
   const startBtn = document.createElement('button'); startBtn.className = 'big-btn';
   startBtn.textContent = 'TEE OFF!'; startBtn.onclick = () => initGame(true);
@@ -1355,9 +1220,9 @@ function showStart() {
 }
 
 // ── BOOT ─────────────────────────────────────────────────────
-// Defer until browser has laid out the DOM (fixes iframe/sandbox sizing)
-requestAnimationFrame(() => {
+requestAnimationFrame(async () => {
   resize();
+  await refreshMyDailyBest();
   showStart();
 });
 </script>
